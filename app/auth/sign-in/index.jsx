@@ -62,7 +62,7 @@ export default function SignIn() {
         </TouchableOpacity>
       </View>
 
-      <TouchableOpacity onPress={() => router.push('auth/forgot-password')}>
+      <TouchableOpacity onPress={() => router.push('../../FrogetPassword/PasswordReset')}>
         <Text style={{ color: '#007bff', textAlign: 'center', marginBottom: 16 }}>Forgot Password?</Text>
       </TouchableOpacity>
 
