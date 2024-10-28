@@ -1,14 +1,36 @@
-import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity } from 'react-native'
-import React from 'react'
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity } from 'react-native';
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '../../configs/firebase';
+import { auth } from '../../configs/firebase';  // Assuming you've initialized Firebase Auth for user ID.
 
 export default function Home() {
+  const [recentlyViewed, setRecentlyViewed] = useState([]);
+
+  useEffect(() => {
+    const fetchRecentlyViewed = async () => {
+      const recentlyViewedCollection = collection(db, 'users', auth.currentUser?.uid, 'recentlyViewed');
+      const snapshot = await getDocs(recentlyViewedCollection);
+      const productsData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+
+      setRecentlyViewed(productsData);
+    };
+
+    fetchRecentlyViewed();
+  }, []);
+
   return (
     <ScrollView style={styles.container}>
+      
       <View style={styles.helloSection}>
         <Text style={styles.helloText}>Welcome Back <Text style={styles.highlight}></Text>!</Text>
         <Text style={styles.tagline}>Discover trending fashion just for you.</Text>
       </View>
 
+      
       <View style={styles.storiesSection}>
         <Text style={styles.sectionTitle}>Latest Stories</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -24,23 +46,24 @@ export default function Home() {
         </ScrollView>
       </View>
 
+      
       <View style={styles.recentlyViewedSection}>
         <Text style={styles.sectionTitle}>Recently Viewed</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          {['Jacket', 'T-Shirt', 'Sneakers', 'Dress'].map((item, index) => (
-            <View key={index} style={styles.productCard}>
+          {recentlyViewed.map((item) => (
+            <View key={item.id} style={styles.productCard}>
               <Image
-                source={{ uri: 'https://via.placeholder.com/150' }}
+                source={{ uri: item.productImage }}
                 style={styles.productImage}
               />
-              <Text style={styles.productName}>{item}</Text>
-              <Text style={styles.productPrice}>$65.00</Text>
+              <Text style={styles.productName}>{item.productName}</Text>
+              <Text style={styles.productPrice}>${item.productPrice}</Text>
             </View>
           ))}
         </ScrollView>
       </View>
     </ScrollView>
-  )
+  );
 }
 
 const styles = StyleSheet.create({
@@ -123,4 +146,4 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#ff6b6b',
   },
-})
+});

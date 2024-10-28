@@ -1,143 +1,107 @@
-import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity } from 'react-native'
-import React from 'react'
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, FlatList, Image, TouchableOpacity } from 'react-native';
+import { doc, collection, getDocs } from 'firebase/firestore';
+import { auth, db } from '../../configs/firebase';
 
 export default function Cart() {
-  return (
-    <View style={styles.container}>
-      
-      <View style={styles.header}>
-        <Text style={styles.headerText}>My Cart</Text>
-      </View>
+  const [cartItems, setCartItems] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-      
-      <ScrollView style={styles.itemsContainer}>
-        {['Jacket', 'Dress', 'Sneakers', 'Hat'].map((item, index) => (
-          <View key={index} style={styles.itemCard}>
-            <Image
-              source={{ uri: 'https://via.placeholder.com/150' }}
-              style={styles.itemImage}
-            />
-            <View style={styles.itemDetails}>
-                
-              <Text style={styles.itemName}>{item}</Text>
-              <Text style={styles.itemPrice}>$75.00</Text>
+  useEffect(() => {
+    const fetchCartItems = async () => {
+      try {
+        const userId = auth.currentUser?.uid;
+        if (!userId) return;
 
-              
-              <View style={styles.quantityControl}>
-                <TouchableOpacity style={styles.quantityButton}>
-                  <Text style={styles.quantityButtonText}>-</Text>
-                </TouchableOpacity>
-                <Text style={styles.quantityText}>1</Text>
-                <TouchableOpacity style={styles.quantityButton}>
-                  <Text style={styles.quantityButtonText}>+</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        ))}
-      </ScrollView>
+        const cartRef = collection(db, 'users', userId, 'cart');
+        const cartSnapshot = await getDocs(cartRef);
 
-      
-      <View style={styles.checkoutSection}>
-        <Text style={styles.totalText}>Total: $300.00</Text>
-        <TouchableOpacity style={styles.checkoutButton}>
-          <Text style={styles.checkoutButtonText}>Proceed to Checkout</Text>
+        const items = cartSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+
+        setCartItems(items);
+      } catch (error) {
+        console.error("Error fetching cart items:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCartItems();
+  }, []);
+
+  if (loading) {
+    return <Text>Loading...</Text>;
+  }
+
+  if (!cartItems.length) {
+    return <Text>Your cart is empty.</Text>;
+  }
+
+  const renderItem = ({ item }) => (
+    <View style={styles.itemContainer}>
+      <Image source={{ uri: item.imageUrl }} style={styles.image} />
+      <View style={styles.infoContainer}>
+        <Text style={styles.itemName}>{item.name}</Text>
+        <Text style={styles.itemPrice}>${item.price}</Text>
+        <TouchableOpacity style={styles.removeButton}>
+          <Text style={styles.removeButtonText}>Remove</Text>
         </TouchableOpacity>
       </View>
     </View>
-  )
+  );
+
+  return (
+    <FlatList
+      data={cartItems}
+      renderItem={renderItem}
+      keyExtractor={(item) => item.id}
+      contentContainerStyle={styles.container}
+    />
+  );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-    paddingHorizontal: 15,
+    padding: 16,
   },
-  header: {
-    marginTop: 20,
-    marginBottom: 20,
-    alignItems: 'center',
-  },
-  headerText: {
-    fontSize: 23,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  itemsContainer: {
-    marginBottom: 20,
-  },
-  itemCard: {
+  itemContainer: {
     flexDirection: 'row',
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    marginBottom: 15,
-    elevation: 4,
-    padding: 10,
+    marginBottom: 16,
+    padding: 8,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 8,
   },
-  itemImage: {
-    width: 100,
-    height: 100,
-    borderRadius: 10,
-    marginRight: 15,
+  image: {
+    width: 80,
+    height: 80,
+    borderRadius: 8,
   },
-  itemDetails: {
+  infoContainer: {
     flex: 1,
+    paddingLeft: 12,
     justifyContent: 'center',
   },
   itemName: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   itemPrice: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#ff6b6b',
-    marginVertical: 5,
+    fontSize: 14,
+    color: '#888',
+    marginVertical: 4,
   },
-  quantityControl: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 10,
+  removeButton: {
+    marginTop: 8,
+    paddingVertical: 4,
+    paddingHorizontal: 12,
+    backgroundColor: '#ff5c5c',
+    borderRadius: 6,
   },
-  quantityButton: {
-    backgroundColor: '#ff6b6b',
-    borderRadius: 5,
-    padding: 5,
-    marginHorizontal: 10,
-  },
-  quantityButtonText: {
+  removeButtonText: {
     color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: 14,
   },
-  quantityText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-  },
-  checkoutSection: {
-    padding: 15,
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    elevation: 4,
-  },
-  totalText: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 15,
-  },
-  checkoutButton: {
-    backgroundColor: '#ff6b6b',
-    paddingVertical: 15,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  checkoutButtonText: {
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: 'bold',
-  },
-})
+});

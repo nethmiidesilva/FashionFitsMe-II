@@ -1,92 +1,132 @@
-import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity } from 'react-native'
-import React from 'react'
+import React, { useState, useEffect } from 'react';
+import { View, Text, FlatList, Image, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
+import { doc, collection, getDocs } from 'firebase/firestore';
+import { auth, db } from './../../configs/firebase';
 
 export default function Wishlist() {
-  return (
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerText}>My Wishlist</Text>
-      </View>
+  const [wishlist, setWishlist] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const user = auth.currentUser;
 
-      <View style={styles.itemsContainer}>
-        {['Jacket', 'Dress', 'Sneakers', 'Hat'].map((item, index) => (
-          <View key={index} style={styles.itemCard}>
-            <Image
-              source={{ uri: 'https://via.placeholder.com/150' }}
-              style={styles.itemImage}
-            />
-            <View style={styles.itemDetails}>
-              <Text style={styles.itemName}>{item}</Text>
-              <Text style={styles.itemPrice}>$75.00</Text>
-              <TouchableOpacity style={styles.removeButton}>
-                <Text style={styles.removeButtonText}>Remove</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        ))}
+  useEffect(() => {
+    const fetchWishlist = async () => {
+      if (user) {
+        try {
+          const wishlistRef = collection(db, 'users', user.uid, 'wishlist');
+          const wishlistSnapshot = await getDocs(wishlistRef);
+          const wishlistItems = wishlistSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          setWishlist(wishlistItems);
+        } catch (error) {
+          console.error("Error fetching wishlist:", error);
+        } finally {
+          setLoading(false);
+        }
+      }
+    };
+
+    fetchWishlist();
+  }, [user]);
+
+  const renderWishlistItem = ({ item }) => (
+    <View style={styles.itemContainer}>
+      <Image source={{ uri: item.imageUrl }} style={styles.itemImage} />
+      <View style={styles.itemDetails}>
+        <Text style={styles.itemTitle}>{item.title}</Text>
+        <Text style={styles.itemDescription}>
+          {item.description ? item.description.slice(0, 50) + '...' : 'No description available.'}
+        </Text>
+        <Text style={styles.itemPrice}>Rs {item.price ? item.price : 'N/A'}</Text>
       </View>
-    </ScrollView>
-  )
+      <TouchableOpacity style={styles.removeButton}>
+        <Text style={styles.removeButtonText}>Remove</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#007bff" />
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      {wishlist.length > 0 ? (
+        <FlatList
+          data={wishlist}
+          renderItem={renderWishlistItem}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.listContent}
+        />
+      ) : (
+        <Text style={styles.emptyMessage}>Your wishlist is empty.</Text>
+      )}
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
-    paddingHorizontal: 15,
+    backgroundColor: 'white',
+    padding: 16,
   },
-  header: {
-    marginTop: 20,
-    marginBottom: 20,
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  headerText: {
-    fontSize: 23,
-    fontWeight: 'bold',
-    color: '#333',
+  listContent: {
+    paddingBottom: 16,
   },
-  itemsContainer: {
-    marginBottom: 30,
-  },
-  itemCard: {
+  itemContainer: {
     flexDirection: 'row',
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    marginBottom: 15,
-    elevation: 4,
-    padding: 10,
+    alignItems: 'center',
+    backgroundColor: '#f9f9f9',
+    padding: 16,
+    marginBottom: 10,
+    borderRadius: 8,
   },
   itemImage: {
-    width: 100,
-    height: 100,
-    borderRadius: 10,
-    marginRight: 15,
+    width: 60,
+    height: 60,
+    borderRadius: 8,
+    marginRight: 16,
   },
   itemDetails: {
     flex: 1,
-    justifyContent: 'center',
   },
-  itemName: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
-  },
-  itemPrice: {
+  itemTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#ff6b6b',
-    marginVertical: 5,
+  },
+  itemDescription: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 4,
+  },
+  itemPrice: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: 'bold',
+    marginTop: 4,
   },
   removeButton: {
-    backgroundColor: '#ff6b6b',
-    borderRadius: 5,
-    paddingVertical: 5,
-    paddingHorizontal: 15,
-    alignSelf: 'flex-start',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    backgroundColor: '#ff4d4f',
+    borderRadius: 4,
   },
   removeButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
+    color: 'white',
+    fontWeight: 'bold',
   },
-})
+  emptyMessage: {
+    textAlign: 'center',
+    color: '#888',
+    fontSize: 18,
+    marginTop: 20,
+  },
+});
