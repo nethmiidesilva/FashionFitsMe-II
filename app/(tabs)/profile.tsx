@@ -68,7 +68,7 @@ export default function Profile() {
       {/* Profile Card */}
       <View style={styles.profileCard}>
         <Image
-          source={{ uri: 'https://via.placeholder.com/100' }} // Replace with the actual profile image URL
+          source={{ uri: 'https://via.placeholder.com/100' }} 
           style={styles.profileImage}
         />
         <View style={styles.profileInfo}>

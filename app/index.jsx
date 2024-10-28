@@ -10,7 +10,7 @@ export default function index() {
 
   return (
     <View style={{ flex: 1 }}>
-    {user? <Redirect href={'/mytrip'}/>:<Start/>}
+    {user? <Redirect href={'/home'}/>:<Start/>}
   </View>
   )
 }

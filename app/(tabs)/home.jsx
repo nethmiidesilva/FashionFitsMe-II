@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity } from 'react-native';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../configs/firebase';
-import { auth } from '../../configs/firebase';  // Assuming you've initialized Firebase Auth for user ID.
+import { auth } from '../../configs/firebase';  
 
 export default function Home() {
   const [recentlyViewed, setRecentlyViewed] = useState([]);
