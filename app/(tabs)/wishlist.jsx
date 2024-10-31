@@ -72,6 +72,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'white',
     padding: 16,
+    paddingTop: 25,
   },
   loadingContainer: {
     flex: 1,
@@ -103,9 +104,10 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   itemDescription: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#666',
     marginTop: 4,
+    paddingRight: 0,
   },
   itemPrice: {
     fontSize: 14,

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, Image, TouchableOpacity } from 'react-native';
-import { doc, collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs } from 'firebase/firestore';
 import { auth, db } from '../../configs/firebase';
 
 export default function Cart() {
@@ -32,6 +32,12 @@ export default function Cart() {
     fetchCartItems();
   }, []);
 
+  const calculateTotalPrice = () => {
+    return cartItems
+      .reduce((total, item) => total + Number(item.price || 0), 0)
+      .toFixed(2);
+  };
+
   if (loading) {
     return <Text>Loading...</Text>;
   }
@@ -45,7 +51,7 @@ export default function Cart() {
       <Image source={{ uri: item.imageUrl }} style={styles.image} />
       <View style={styles.infoContainer}>
         <Text style={styles.itemName}>{item.name}</Text>
-        <Text style={styles.itemPrice}>${item.price}</Text>
+        <Text style={styles.itemPrice}>Rs {item.price}</Text>
         <TouchableOpacity style={styles.removeButton}>
           <Text style={styles.removeButtonText}>Remove</Text>
         </TouchableOpacity>
@@ -54,25 +60,38 @@ export default function Cart() {
   );
 
   return (
-    <FlatList
-      data={cartItems}
-      renderItem={renderItem}
-      keyExtractor={(item) => item.id}
-      contentContainerStyle={styles.container}
-    />
+    <View style={styles.container}>
+      <FlatList
+        data={cartItems}
+        renderItem={renderItem}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={styles.listContainer}
+      />
+      <View style={styles.totalContainer}>
+        <Text style={styles.totalText}>Total Price:</Text>
+        <Text style={styles.totalPrice}>Rs {calculateTotalPrice()}</Text>
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
     padding: 16,
+    backgroundColor: '#f5f5f5',
+    paddingTop: 25,
+  },
+  listContainer: {
+    paddingBottom: 16,
   },
   itemContainer: {
     flexDirection: 'row',
     marginBottom: 16,
     padding: 8,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#fff',
     borderRadius: 8,
+    elevation: 2,
   },
   image: {
     width: 80,
@@ -87,6 +106,7 @@ const styles = StyleSheet.create({
   itemName: {
     fontSize: 16,
     fontWeight: 'bold',
+    color: '#333',
   },
   itemPrice: {
     fontSize: 14,
@@ -103,5 +123,26 @@ const styles = StyleSheet.create({
   removeButtonText: {
     color: '#fff',
     fontSize: 14,
+  },
+  totalContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 8,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    elevation: 2,
+    marginTop: 16,
+  },
+  totalText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  totalPrice: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#007bff',
   },
 });

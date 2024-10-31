@@ -1,36 +1,45 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity } from 'react-native';
+import React, { useEffect, useState, useRef } from 'react';
+import { View, Text, StyleSheet, ScrollView, Image, FlatList, TouchableOpacity, Dimensions } from 'react-native';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../configs/firebase';
-import { auth } from '../../configs/firebase';  
+import { useRouter } from 'expo-router';
+import { auth } from '../../configs/firebase';
+
+const { width } = Dimensions.get('window');
 
 export default function Home() {
+  const [clothes, setClothes] = useState([]);
   const [recentlyViewed, setRecentlyViewed] = useState([]);
+  const flatListRef = useRef(null);
+  const router = useRouter();
 
   useEffect(() => {
-    const fetchRecentlyViewed = async () => {
-      const recentlyViewedCollection = collection(db, 'users', auth.currentUser?.uid, 'recentlyViewed');
-      const snapshot = await getDocs(recentlyViewedCollection);
-      const productsData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
+    const fetchData = async () => {
+      try {
+        const clothesCollection = collection(db, 'clothes');
+        const snapshot = await getDocs(clothesCollection);
+        const clothesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setClothes(clothesData);
 
-      setRecentlyViewed(productsData);
+        const recentlyViewedCollection = collection(db, 'users', auth.currentUser?.uid, 'recentlyViewed');
+        const recentSnapshot = await getDocs(recentlyViewedCollection);
+        const productsData = recentSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setRecentlyViewed(productsData);
+      } catch (error) {
+        console.error("Error fetching data: ", error);
+      }
     };
 
-    fetchRecentlyViewed();
+    fetchData();
   }, []);
 
   return (
     <ScrollView style={styles.container}>
-      
       <View style={styles.helloSection}>
-        <Text style={styles.helloText}>Welcome Back <Text style={styles.highlight}></Text>!</Text>
+        <Text style={styles.helloText}>Welcome Back!</Text>
         <Text style={styles.tagline}>Discover trending fashion just for you.</Text>
       </View>
 
-      
       <View style={styles.storiesSection}>
         <Text style={styles.sectionTitle}>Latest Stories</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -46,14 +55,43 @@ export default function Home() {
         </ScrollView>
       </View>
 
-      
+      <View style={styles.carouselSection}>
+        <Text style={styles.sectionTitle}>Clothes Collection</Text>
+        <FlatList
+          data={clothes}
+          horizontal
+          ref={flatListRef}
+          showsHorizontalScrollIndicator={false}
+          renderItem={({ item }) => (
+            <TouchableOpacity 
+              style={styles.productCard} 
+              onPress={() => router.push({
+                pathname: 'Product/productDetails',
+                params: { itemId: item.id },
+              })}
+            >
+              <Image 
+                source={{ uri: item.imgUrl || 'https://via.placeholder.com/150' }} 
+                style={styles.productImage} 
+              />
+              <Text style={styles.productName}>{item.item || 'Unknown Item'}</Text>
+              <Text style={styles.productPrice}>${item.id || '0.00'}</Text>
+            </TouchableOpacity>
+          )}
+          keyExtractor={(item) => item.id}
+          snapToAlignment="start"
+          decelerationRate="fast"
+          snapToInterval={(width - 40) / 2} 
+        />
+      </View>
+
       <View style={styles.recentlyViewedSection}>
         <Text style={styles.sectionTitle}>Recently Viewed</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           {recentlyViewed.map((item) => (
             <View key={item.id} style={styles.productCard}>
               <Image
-                source={{ uri: item.productImage }}
+                source={{ uri: item.productImage || 'https://via.placeholder.com/150' }}
                 style={styles.productImage}
               />
               <Text style={styles.productName}>{item.productName}</Text>
@@ -69,81 +107,68 @@ export default function Home() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
-    paddingHorizontal: 15,
-  },
-  helloSection: {
-    marginTop: 35,
-    marginBottom: 25,
     padding: 20,
     backgroundColor: '#fff',
-    borderRadius: 12,
-    elevation: 4, 
+  },
+  helloSection: {
+    marginBottom: 20,
   },
   helloText: {
-    fontSize: 23,
-    fontWeight: '600',
-    color: '#333',
-  },
-  highlight: {
-    color: '#ff6b6b',
+    fontSize: 24,
+    fontWeight: 'bold',
   },
   tagline: {
     fontSize: 16,
-    color: '#888',
-    marginTop: 5,
-  },
-  sectionTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 15,
+    color: '#666',
   },
   storiesSection: {
-    marginBottom: 30,
+    marginBottom: 20,
   },
-  story: {
-    alignItems: 'center',
-    marginRight: 15,
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 10,
   },
-  storyImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    marginBottom: 8,
-    borderWidth: 2,
-    borderColor: '#ff6b6b',
-  },
-  storyText: {
-    fontSize: 14,
-    color: '#444',
-  },
-  recentlyViewedSection: {
-    marginBottom: 30,
+  noDataText: {
+    fontSize: 16,
+    color: '#999',
   },
   productCard: {
-    width: 160,
-    backgroundColor: '#fff',
+    marginRight: 10,
+    width: (width - 40) / 2,
+    backgroundColor: '#f0f0f0',
     borderRadius: 10,
-    marginRight: 20,
+    overflow: 'hidden',
     padding: 10,
-    elevation: 4,
   },
   productImage: {
     width: '100%',
-    height: 160,
+    height: 150,
     borderRadius: 10,
   },
   productName: {
-    marginTop: 10,
+    marginTop: 5,
     fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
+    fontWeight: 'bold',
   },
   productPrice: {
+    fontSize: 14,
+    color: '#333',
+  },
+  story: {
+    marginRight: 10,
+    alignItems: 'center',
+  },
+  storyImage: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+  },
+  storyText: {
     marginTop: 5,
-    fontSize: 15,
-    fontWeight: 'bold',
-    color: '#ff6b6b',
+    fontSize: 14,
+  },
+  recentlyViewedSection: {
+    marginBottom: 30,
   },
 });

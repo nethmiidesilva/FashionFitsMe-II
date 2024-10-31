@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Image, FlatList, Dimensions, TouchableOpacity } from 'react-native';
 import { doc, getDoc, collection, getDocs, DocumentData } from 'firebase/firestore';
 import { auth, db } from '../../configs/firebase';
+import { useRouter } from 'expo-router';
 
 const screenHeight = Dimensions.get('window').height;
 
@@ -15,6 +16,7 @@ interface OrderWithId extends Order {
 }
 
 export default function Profile() {
+  const router = useRouter(); // Initialize router
   const [username, setUsername] = useState<string>('');
   const [email, setEmail] = useState<string>('');
   const [orders, setOrders] = useState<OrderWithId[]>([]);
@@ -41,7 +43,7 @@ export default function Profile() {
         const ordersData = ordersSnapshot.docs.map(doc => ({
           id: doc.id,
           productName: doc.data().productName,
-          price: doc.data().price,
+          price: doc.data().Price, // Ensure this matches the database field
         })) as OrderWithId[];
         setOrders(ordersData);
       }
@@ -55,9 +57,12 @@ export default function Profile() {
     <View style={styles.orderItem}>
       <View style={styles.orderDetails}>
         <Text style={styles.orderText}>{item.productName}</Text>
-        <Text style={styles.orderText}>Price: ${item.price}</Text>
+        <Text style={styles.orderText}>Price: Rs {item.price}</Text>
       </View>
-      <TouchableOpacity style={styles.detailsButton}>
+      <TouchableOpacity
+        style={styles.detailsButton}
+        onPress={() => router.push('order/OrderDetail')} // Navigate to OrderDetail
+      >
         <Text style={styles.buttonText}>View Details</Text>
       </TouchableOpacity>
     </View>
@@ -72,8 +77,8 @@ export default function Profile() {
           style={styles.profileImage}
         />
         <View style={styles.profileInfo}>
-          <Text style={styles.profileText}>Username: {username}</Text>
-          <Text style={styles.profileText}>Email: {email}</Text>
+          <Text style={styles.usernameText}>{username}</Text>
+          <Text style={styles.emailText}>{email}</Text>
         </View>
       </View>
 
@@ -93,35 +98,50 @@ export default function Profile() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#f9f9f9',
     padding: 16,
+    paddingTop: 25,
   },
   profileCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f0f0f0',
-    borderRadius: 10,
-    padding: 16,
-    height: screenHeight * 0.2,
+    backgroundColor: '#fff',
+    borderRadius: 15,
+    paddingTop: 20,
+    paddingBottom: 20,
     marginBottom: 20,
+    paddingLeft: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 5,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
   },
   profileImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 90,
+    height: 90,
+    borderRadius: 45,
     marginRight: 16,
   },
   profileInfo: {
+    flex: 1,
     justifyContent: 'center',
   },
-  profileText: {
-    fontSize: 16,
+  usernameText: {
+    fontSize: 20,
+    fontWeight: '600',
     color: '#333',
-    marginBottom: 4,
+  },
+  emailText: {
+    fontSize: 14, 
+    color: '#666',
+    marginTop: 4,
   },
   sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
+    fontSize: 22,
+    fontWeight: '700',
     color: '#333',
     marginBottom: 10,
   },
