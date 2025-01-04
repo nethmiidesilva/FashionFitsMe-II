@@ -8,6 +8,7 @@ import { auth } from '../../configs/firebase';
 const { width } = Dimensions.get('window');
 
 export default function Home() {
+  const [categories, setcategories] = useState([]);
   const [clothes, setClothes] = useState([]);
   const [recentlyViewed, setRecentlyViewed] = useState([]);
   const flatListRef = useRef(null);
@@ -16,15 +17,20 @@ export default function Home() {
   useEffect(() => {
     const fetchData = async () => {
       try {
+        const categoryCollection = collection(db, 'stories');
+        const categorysnapshot = await getDocs(categoryCollection);
         const clothesCollection = collection(db, 'clothes');
-        const snapshot = await getDocs(clothesCollection);
-        const clothesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const clothessnapshot = await getDocs(clothesCollection);
+        const categoryData = categorysnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setcategories(categoryData);
+        const clothesData = clothessnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setClothes(clothesData);
 
         const recentlyViewedCollection = collection(db, 'users', auth.currentUser?.uid, 'recentlyViewed');
         const recentSnapshot = await getDocs(recentlyViewedCollection);
         const productsData = recentSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setRecentlyViewed(productsData);
+        
       } catch (error) {
         console.error("Error fetching data: ", error);
       }
@@ -41,19 +47,31 @@ export default function Home() {
       </View>
 
       <View style={styles.storiesSection}>
-        <Text style={styles.sectionTitle}>Latest Stories</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          {['New Arrivals', 'Summer Sale', 'Exclu Trends', 'Lookbook'].map((story, index) => (
-            <TouchableOpacity key={index} style={styles.story}>
-              <Image
-                source={{ uri: 'https://via.placeholder.com/100' }}
-                style={styles.storyImage}
-              />
-              <Text style={styles.storyText}>{story}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
+      <Text style={styles.sectionTitle}>Latest Stories</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+  {categories.length > 0 ? (
+    categories.map((story, index) => (
+      <TouchableOpacity key={index} style={styles.story}  onPress={() => router.push({
+        pathname: 'Product/productDetails',
+        params: { itemId: story.categoryId },
+      })}>
+        <Image
+          source={{ uri: story.image  || 'https://signature.lk/wp-content/uploads/2024/12/7-6-680x920.jpg' }} // Use 'story.image' if available
+          style={styles.storyImage}
+          
+        />
+        <Text style={styles.storyText}>
+          {story.categoryName ?? 'Unnamed Story'} {/* Ensure name is a string */}
+        </Text>
+        
+      </TouchableOpacity>
+    ))
+  ) : (
+    <Text style={styles.emptyText}>No stories available</Text>
+  )}
+</ScrollView>
+
+    </View>
 
       <View style={styles.carouselSection}>
         <Text style={styles.sectionTitle}>Clothes Collection</Text>

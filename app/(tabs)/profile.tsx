@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Image, FlatList, Dimensions, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Image, FlatList, Dimensions, TouchableOpacity, Alert } from 'react-native';
 import { doc, getDoc, collection, getDocs, DocumentData } from 'firebase/firestore';
+import { signOut } from 'firebase/auth';
 import { auth, db } from '../../configs/firebase';
 import { useRouter } from 'expo-router';
 
@@ -53,6 +54,17 @@ export default function Profile() {
     fetchOrders();
   }, []);
 
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      Alert.alert('Logged Out', 'You have been logged out successfully.');
+      router.replace('/auth/sign-in'); // Navigate to sign-in page
+    } catch (error) {
+      console.error('Error logging out:', error);
+      Alert.alert('Logout Failed', 'An error occurred while logging out.');
+    }
+  };
+
   const renderOrderItem = ({ item }: { item: OrderWithId }) => (
     <View style={styles.orderItem}>
       <View style={styles.orderDetails}>
@@ -61,7 +73,7 @@ export default function Profile() {
       </View>
       <TouchableOpacity
         style={styles.detailsButton}
-        onPress={() => router.push('order/OrderDetail')} // Navigate to OrderDetail
+        
       >
         <Text style={styles.buttonText}>View Details</Text>
       </TouchableOpacity>
@@ -73,13 +85,16 @@ export default function Profile() {
       {/* Profile Card */}
       <View style={styles.profileCard}>
         <Image
-          source={{ uri: 'https://via.placeholder.com/100' }} 
+          source={{ uri: 'https://via.placeholder.com/100' }}
           style={styles.profileImage}
         />
         <View style={styles.profileInfo}>
           <Text style={styles.usernameText}>{username}</Text>
           <Text style={styles.emailText}>{email}</Text>
         </View>
+        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+          <Text style={styles.logoutButtonText}>Logout</Text>
+        </TouchableOpacity>
       </View>
 
       {/* My Orders Section */}
@@ -105,12 +120,11 @@ const styles = StyleSheet.create({
   profileCard: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     backgroundColor: '#fff',
     borderRadius: 15,
-    paddingTop: 20,
-    paddingBottom: 20,
+    padding: 20,
     marginBottom: 20,
-    paddingLeft: 10,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
@@ -127,7 +141,6 @@ const styles = StyleSheet.create({
   },
   profileInfo: {
     flex: 1,
-    justifyContent: 'center',
   },
   usernameText: {
     fontSize: 20,
@@ -135,9 +148,19 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   emailText: {
-    fontSize: 14, 
+    fontSize: 14,
     color: '#666',
     marginTop: 4,
+  },
+  logoutButton: {
+    backgroundColor: '#ff3b30',
+    padding: 8,
+    borderRadius: 8,
+  },
+  logoutButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
   },
   sectionTitle: {
     fontSize: 22,
