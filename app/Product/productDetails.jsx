@@ -1,100 +1,119 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity, ScrollView } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Ionicons';
+import { useLocalSearchParams } from "expo-router";
+import { db } from '../../configs/firebase';
+import { collection, getDocs } from 'firebase/firestore';
 
-export default function ProductDetails() {
+export default function ProductDetails({ route }) {
   const navigation = useNavigation();
+  const item = useLocalSearchParams();
+  console.log(item.itemId);
 
-  // Updated hardcoded product data with new fields
-  const product = {
-    brand: "Brand 1",
-    color: "Blue",
-    createdAt: "2024-10-28T22:26:35.893Z",
-    imgUrl: "https://via.placeholder.com/300?text=Clothes+1",
-    item: "Blue Denim Jacket",
-    material: "Denim",
-    price: "75.99",
-    size: "M",
-    description: "Stylish and comfortable denim jacket for casual outings.",
-    stockAvailability: 10,
-    ratings: 4.5,
-    reviews: [
-      {
-        username: "john_doe",
-        reviewText: "Excellent quality and fit!",
-        rating: 5,
-        createdAt: "2024-10-01T10:15:12.893Z",
-      },
-    ],
-  };
-
-  // States to track wishlist and cart button states
+  const [categories, setCategories] = useState([]);
+  const [clothes, setClothes] = useState([]);
+  const [recentlyViewed, setRecentlyViewed] = useState([]);
   const [isWishlisted, setWishlisted] = useState(false);
   const [isInCart, setInCart] = useState(false);
 
-  const handleWishlist = () => setWishlisted(!isWishlisted);
-  const handleAddToCart = () => setInCart(!isInCart);
+  // Fetch data from Firestore
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+
+        const clothesCollection = collection(db, 'clothes');
+        const clothesSnapshot = await getDocs(clothesCollection);
+        const clothesData = clothesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setClothes(clothesData);
+        console.log(clothesData);
+
+
+      } catch (error) {
+        console.error("Error fetching data:", error);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  // Handle wishlist and cart actions
+  const handleWishlist = () => {
+    console.log(isWishlisted ? "Removing from Wishlist" : "Adding to Wishlist");
+    setWishlisted(!isWishlisted);
+  };
+
+  const handleAddToCart = () => {
+    console.log(isInCart ? "Removing from Cart" : "Adding to Cart");
+    setInCart(!isInCart);
+  };
+
+  // Find the relevant product based on itemId
+  const product = clothes.find(cloth => cloth.id === item.itemId);
 
   return (
     <ScrollView style={styles.container}>
-      <Image source={{ uri: product.imgUrl }} style={styles.productImage} />
-      <View style={styles.detailsContainer}>
-        <Text style={styles.productName}>{product.item} - {product.brand}</Text>
-        <Text style={styles.productPrice}>${product.price}</Text>
+      {product ? (
+        <>
+          <Image source={{ uri: product.imgUrl }} style={styles.productImage} />
+          <View style={styles.detailsContainer}>
+            <Text style={styles.productName}>{product.item} - {product.brand}</Text>
+            <Text style={styles.productPrice}>${product.price}</Text>
 
-        <View style={styles.detailsBox}>
-          <Text style={styles.productDetails}>Size: <Text style={styles.highlight}>{product.size}</Text></Text>
-          <Text style={styles.productDetails}>Color: <Text style={styles.highlight}>{product.color}</Text></Text>
-          <Text style={styles.productDetails}>Material: <Text style={styles.highlight}>{product.material}</Text></Text>
-          <Text style={styles.productDetails}>Stock Availability: <Text style={styles.highlight}>{product.stockAvailability}</Text></Text>
-          <Text style={styles.productDetails}>Rating: <Text style={styles.highlight}>{product.ratings} ★</Text></Text>
-          <Text style={styles.productDetails}>Created At: <Text style={styles.highlight}>{new Date(product.createdAt).toLocaleString()}</Text></Text>
-        </View>
-
-        <Text style={styles.productDescription}>{product.description}</Text>
-
-        {/* Reviews Section */}
-        <View style={styles.reviewsContainer}>
-          <Text style={styles.reviewsTitle}>Customer Reviews:</Text>
-          {product.reviews.map((review, index) => (
-            <View key={index} style={styles.reviewBox}>
-              <Text style={styles.reviewUsername}>{review.username}</Text>
-              <Text style={styles.reviewRating}>{review.rating} ★</Text>
-              <Text style={styles.reviewText}>{review.reviewText}</Text>
-              <Text style={styles.reviewDate}>{new Date(review.createdAt).toLocaleDateString()}</Text>
+            <View style={styles.detailsBox}>
+              <Text style={styles.productDetails}>Size: <Text style={styles.highlight}>{product.size}</Text></Text>
+              <Text style={styles.productDetails}>Color: <Text style={styles.highlight}>{product.color}</Text></Text>
+              <Text style={styles.productDetails}>Material: <Text style={styles.highlight}>{product.material}</Text></Text>
+              <Text style={styles.productDetails}>Stock Availability: <Text style={styles.highlight}>{product.stockAvailability}</Text></Text>
+              <Text style={styles.productDetails}>Rating: <Text style={styles.highlight}>{product.ratings} ★</Text></Text>
+              <Text style={styles.productDetails}>Created At: <Text style={styles.highlight}>{new Date(product.createdAt).toLocaleString()}</Text></Text>
             </View>
-          ))}
-        </View>
-      </View>
 
-      {/* Floating action bar with icons */}
-      {/* Floating action bar with icons */}
-<View style={styles.actionBar}>
-  <TouchableOpacity
-    style={styles.actionButton} // Remove conditional buttonActive style
-    onPress={handleWishlist}
-  >
-    <Icon
-      name="heart"
-      size={24}
-      color={isWishlisted ? '#ff6b6b' : '#fff'} // Change icon color based on isWishlisted
-    />
-    <Text style={styles.actionText}>Wishlist</Text>
-  </TouchableOpacity>
-  <TouchableOpacity
-    style={styles.actionButton} // Remove conditional buttonActive style
-    onPress={handleAddToCart}
-  >
-    <Icon
-      name="cart"
-      size={24}
-      color={isInCart ? '#008000' : '#fff'} // Change icon color based on isInCart
-    />
-    <Text style={styles.actionText}>Add to Cart</Text>
-  </TouchableOpacity>
-</View>
+            <Text style={styles.productDescription}>{product.description}</Text>
 
+            {/* Reviews Section */}
+            {/* <View style={styles.reviewsContainer}>
+              <Text style={styles.reviewsTitle}>Customer Reviews:</Text>
+              {product.reviews.map((review, index) => (
+                <View key={index} style={styles.reviewBox}>
+                  <Text style={styles.reviewUsername}>{review.username}</Text>
+                  <Text style={styles.reviewRating}>{review.rating} ★</Text>
+                  <Text style={styles.reviewText}>{review.reviewText}</Text>
+                  <Text style={styles.reviewDate}>{new Date(review.createdAt).toLocaleDateString()}</Text>
+                </View>
+              ))}
+            </View> */}
+          </View>
+
+          {/* Floating action bar with icons */}
+          <View style={styles.actionBar}>
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={handleWishlist}
+            >
+              <Icon
+                name="heart"
+                size={24}
+                color={isWishlisted ? '#ff6b6b' : '#fff'}
+              />
+              <Text style={styles.actionText}>Wishlist</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={handleAddToCart}
+            >
+              <Icon
+                name="cart"
+                size={24}
+                color={isInCart ? '#008000' : '#fff'}
+              />
+              <Text style={styles.actionText}>Add to Cart</Text>
+            </TouchableOpacity>
+          </View>
+        </>
+      ) : (
+        <Text style={styles.productName}>Product not found</Text>
+      )}
     </ScrollView>
   );
 }
@@ -196,11 +215,6 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     alignItems: 'center',
-  },
-  buttonActive: {
-    backgroundColor: '#ff6b6b',
-    padding: 10,
-    borderRadius: 30,
   },
   actionText: {
     color: '#fff',

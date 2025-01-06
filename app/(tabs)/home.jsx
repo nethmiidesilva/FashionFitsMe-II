@@ -4,6 +4,7 @@ import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../configs/firebase';
 import { useRouter } from 'expo-router';
 import { auth } from '../../configs/firebase';
+import { router } from 'expo-router';
 
 const { width } = Dimensions.get('window');
 
@@ -13,6 +14,7 @@ export default function Home() {
   const [recentlyViewed, setRecentlyViewed] = useState([]);
   const flatListRef = useRef(null);
   const router = useRouter();
+  
 
   useEffect(() => {
     const fetchData = async () => {
@@ -51,10 +53,16 @@ export default function Home() {
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
   {categories.length > 0 ? (
     categories.map((story, index) => (
-      <TouchableOpacity key={index} style={styles.story}  onPress={() => router.push({
-        pathname: 'Product/productDetails',
-        params: { itemId: story.categoryId },
-      })}>
+<TouchableOpacity 
+  key={index} 
+  style={styles.story}
+  onPress={() => router.push({
+    pathname: 'category/categorylist',
+    params: { categoryId: story?.categoryId },
+  })}  
+  
+>
+
         <Image
           source={{ uri: story.image  || 'https://signature.lk/wp-content/uploads/2024/12/7-6-680x920.jpg' }} // Use 'story.image' if available
           style={styles.storyImage}
