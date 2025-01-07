@@ -4,6 +4,8 @@ import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useLocalSearchParams } from "expo-router";
 import { db } from '../../configs/firebase';
+import { doc, getDoc,setDoc } from 'firebase/firestore';
+import { getAuth } from "firebase/auth";
 import { collection, getDocs } from 'firebase/firestore';
 
 export default function ProductDetails({ route }) {
@@ -14,8 +16,8 @@ export default function ProductDetails({ route }) {
   const [categories, setCategories] = useState([]);
   const [clothes, setClothes] = useState([]);
   const [recentlyViewed, setRecentlyViewed] = useState([]);
-  const [isWishlisted, setWishlisted] = useState(false);
-  const [isInCart, setInCart] = useState(false);
+  const [isWishlisted, setIsInWishlist] = useState(false);
+  const [isInCart, setIsInCart] = useState(false);
 
   // Fetch data from Firestore
   useEffect(() => {
@@ -26,7 +28,7 @@ export default function ProductDetails({ route }) {
         const clothesSnapshot = await getDocs(clothesCollection);
         const clothesData = clothesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setClothes(clothesData);
-        console.log(clothesData);
+        //console.log(clothesData);
 
 
       } catch (error) {
@@ -35,20 +37,130 @@ export default function ProductDetails({ route }) {
     };
 
     fetchData();
+    const wishlist = collection(db, 'wishlist');
+    const clothesSnapshot =   getDocs(wishlist);
+    //console.log(clothesSnapshot);
   }, []);
 
-  // Handle wishlist and cart actions
-  const handleWishlist = () => {
-    console.log(isWishlisted ? "Removing from Wishlist" : "Adding to Wishlist");
-    setWishlisted(!isWishlisted);
+
+
+
+  
+
+
+  useEffect(() => {
+    // Check if the item is in the wishlist on component mount
+    const fetchWishlistState = async () => {
+      try {
+        const userId = getAuth().currentUser.uid;
+        const userDocRef = doc(db, 'wishlist', userId);
+        const userDocSnap = await getDoc(userDocRef);
+
+        if (userDocSnap.exists()) {
+          const items = userDocSnap.data().items || [];
+          setIsInWishlist(items.includes(item.itemId));
+        }
+      } catch (error) {
+        console.error('Error fetching wishlist state:', error);
+      }
+    };
+
+    fetchWishlistState();
+  }, [item.itemId]);
+
+  const addToWishlist = async (clotheId) => {
+    try {
+      const userId = getAuth().currentUser.uid; // Get the current user ID
+      const userDocRef = doc(db, 'wishlist', userId); // Reference to the user's wishlist document
+
+      const userDocSnap = await getDoc(userDocRef);
+
+      let updatedItems = [];
+      if (userDocSnap.exists()) {
+        const items = userDocSnap.data().items || [];
+
+        if (items.includes(clotheId)) {
+          // Remove the item if it's already in the wishlist
+          updatedItems = items.filter((id) => id !== clotheId);
+          setIsInWishlist(false);
+        } else {
+          // Add the item to the wishlist
+          updatedItems = [...items, clotheId];
+          setIsInWishlist(true);
+        }
+      } else {
+        // If no wishlist exists, create one with the item
+        updatedItems = [clotheId];
+        setIsInWishlist(true);
+      }
+
+      // Update the wishlist document in Firestore
+      await setDoc(userDocRef, { items: updatedItems }, { merge: true });
+
+      console.log('Wishlist updated successfully!');
+    } catch (error) {
+      console.error('Error updating wishlist:', error);
+    }
   };
 
-  const handleAddToCart = () => {
-    console.log(isInCart ? "Removing from Cart" : "Adding to Cart");
-    setInCart(!isInCart);
-  };
 
-  // Find the relevant product based on itemId
+  
+  
+
+  useEffect(() => {
+    // Check if the item is in the cart on component mount
+    const fetchCartState = async () => {
+      try {
+        const userId = getAuth().currentUser.uid;
+        const userDocRef = doc(db, 'cart', userId); // Reference to the user's cart document
+        const userDocSnap = await getDoc(userDocRef);
+
+        if (userDocSnap.exists()) {
+          const items = userDocSnap.data().items || [];
+          setIsInCart(items.includes(item.itemId)); // Check if the item is in the cart
+        }
+      } catch (error) {
+        console.error('Error fetching cart state:', error);
+      }
+    };
+
+    fetchCartState();
+  }, [item.itemId]); // Effect runs when itemId changes
+
+  const addToCart = async (clotheId) => {
+    try {
+      const userId = getAuth().currentUser.uid; // Get the current user ID
+      const userDocRef = doc(db, 'cart', userId); // Reference to the user's cart document
+
+      const userDocSnap = await getDoc(userDocRef);
+
+      let updatedItems = [];
+      if (userDocSnap.exists()) {
+        const items = userDocSnap.data().items || [];
+
+        if (items.includes(clotheId)) {
+          // Remove the item from the cart if it's already there
+          updatedItems = items.filter((id) => id !== clotheId);
+          setIsInCart(false); // Update the state to show the item is not in the cart
+        } else {
+          // Add the item to the cart
+          updatedItems = [...items, clotheId];
+          setIsInCart(true); // Update the state to show the item is in the cart
+        }
+      } else {
+        // If no cart exists, create one with the item
+        updatedItems = [clotheId];
+        setIsInCart(true); // Set the state to show the item is in the cart
+      }
+
+      // Update the cart document in Firestore
+      await setDoc(userDocRef, { items: updatedItems }, { merge: true });
+
+      console.log('Cart updated successfully!');
+    } catch (error) {
+      console.error('Error updating cart:', error);
+    }
+  };
   const product = clothes.find(cloth => cloth.id === item.itemId);
 
   return (
@@ -72,25 +184,50 @@ export default function ProductDetails({ route }) {
             <Text style={styles.productDescription}>{product.description}</Text>
 
             {/* Reviews Section */}
-            {/* <View style={styles.reviewsContainer}>
-              <Text style={styles.reviewsTitle}>Customer Reviews:</Text>
-              {product.reviews.map((review, index) => (
-                <View key={index} style={styles.reviewBox}>
-                  <Text style={styles.reviewUsername}>{review.username}</Text>
-                  <Text style={styles.reviewRating}>{review.rating} ★</Text>
-                  <Text style={styles.reviewText}>{review.reviewText}</Text>
-                  <Text style={styles.reviewDate}>{new Date(review.createdAt).toLocaleDateString()}</Text>
-                </View>
-              ))}
-            </View> */}
+            <View style={styles.reviewsContainer}>
+  <Text style={styles.reviewsTitle}>Customer Reviews:</Text>
+  {/* Hardcoded reviews */}
+  {[
+    {
+      username: "John Doe",
+      rating: 5,
+      reviewText: "Great product! The material is very comfortable and fits well.",
+      createdAt: "2023-12-01T12:00:00Z",
+    },
+    {
+      username: "Jane Smith",
+      rating: 4,
+      reviewText: "Good quality but the size was a bit off for me.",
+      createdAt: "2023-12-05T10:30:00Z",
+    },
+    {
+      username: "Mark Johnson",
+      rating: 3,
+      reviewText: "Decent product, but I expected it to be a bit better.",
+      createdAt: "2023-12-08T14:45:00Z",
+    },
+  ].map((review, index) => (
+    <View key={index} style={styles.reviewBox}>
+      <Text style={styles.reviewUsername}>{review.username}</Text>
+      <Text style={styles.reviewRating}>{review.rating} ★</Text>
+      <Text style={styles.reviewText}>{review.reviewText}</Text>
+      <Text style={styles.reviewDate}>
+        {new Date(review.createdAt).toLocaleDateString()}
+      </Text>
+    </View>
+  ))}
+</View>
+
           </View>
 
           {/* Floating action bar with icons */}
           <View style={styles.actionBar}>
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={handleWishlist}
-            >
+  <TouchableOpacity
+    style={styles.actionButton}
+    onPress={() => addToWishlist(item.itemId)} // Corrected: Function call wrapped in an anonymous function
+  >
+
+
               <Icon
                 name="heart"
                 size={24}
@@ -99,9 +236,9 @@ export default function ProductDetails({ route }) {
               <Text style={styles.actionText}>Wishlist</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={styles.actionButton}
-              onPress={handleAddToCart}
-            >
+    style={styles.actionButton}
+    onPress={() => addToCart(item.itemId)} // Corrected: Function call wrapped in an anonymous function
+  >
               <Icon
                 name="cart"
                 size={24}
