@@ -1,9 +1,10 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, Image, FlatList, TouchableOpacity, Dimensions } from 'react-native';
 import { collection, getDocs } from 'firebase/firestore';
+import { doc, getDoc,setDoc,updateDoc ,arrayUnion} from 'firebase/firestore';
 import { db } from '../../configs/firebase';
 import { useRouter } from 'expo-router';
-import { auth } from '../../configs/firebase';
+import { getAuth } from "firebase/auth";
 import { router } from 'expo-router';
 
 const { width } = Dimensions.get('window');
@@ -11,27 +12,46 @@ const { width } = Dimensions.get('window');
 export default function Home() {
   const [categories, setcategories] = useState([]);
   const [clothes, setClothes] = useState([]);
-  const [recentlyViewed, setRecentlyViewed] = useState([]);
+  const [recent, setrecent] = useState([]);
   const flatListRef = useRef(null);
   const router = useRouter();
-  
+  const userId = getAuth().currentUser.uid;
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         const categoryCollection = collection(db, 'stories');
-        const categorysnapshot = await getDocs(categoryCollection);
+        const categorySnapshot = await getDocs(categoryCollection);
+        
         const clothesCollection = collection(db, 'clothes');
-        const clothessnapshot = await getDocs(clothesCollection);
-        const categoryData = categorysnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setcategories(categoryData);
-        const clothesData = clothessnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setClothes(clothesData);
+        const clothesSnapshot = await getDocs(clothesCollection);
+        
+        const recentDocRef = doc(db, 'RecentlyView', userId);
+        const recentSnap = await getDoc(recentDocRef);
+        
+        try {
+          // Fetch category data
+          const categoryData = categorySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          setcategories(categoryData);
+        
+          // Fetch clothes data
+          const clothesData = clothesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          setClothes(clothesData);
+        
+          // Fetch recently viewed data
+          if (recentSnap.exists()) {
+            const recentData = { id: recentSnap.id, ...recentSnap.data() }; // Directly access data from the document snapshot
+            setrecent(recentData); // Update state with the recently viewed data
+            console.log(recentData);
+          } else {
+            console.log('No recently viewed data found.');
+            setrecent([]); // Set empty state if no data exists
+          }
+        } catch (error) {
+          console.error('Error fetching data:', error);
+        }
+        
 
-        const recentlyViewedCollection = collection(db, 'users', auth.currentUser?.uid, 'recentlyViewed');
-        const recentSnapshot = await getDocs(recentlyViewedCollection);
-        const productsData = recentSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setRecentlyViewed(productsData);
         
       } catch (error) {
         console.error("Error fetching data: ", error);
@@ -113,18 +133,32 @@ export default function Home() {
 
       <View style={styles.recentlyViewedSection}>
         <Text style={styles.sectionTitle}>Recently Viewed</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          {recentlyViewed.map((item) => (
-            <View key={item.id} style={styles.productCard}>
-              <Image
-                source={{ uri: item.productImage || 'https://via.placeholder.com/150' }}
-                style={styles.productImage}
+        <FlatList
+          data={recent}
+          horizontal
+          ref={flatListRef}
+          showsHorizontalScrollIndicator={false}
+          renderItem={({ item }) => (
+            <TouchableOpacity 
+              style={styles.productCard} 
+              onPress={() => router.push({
+                pathname: 'Product/productDetails',
+                params: { itemId: item.id },
+              })}
+            >
+              <Image 
+                source={{ uri: item.imgUrl || 'https://via.placeholder.com/150' }} 
+                style={styles.productImage} 
               />
-              <Text style={styles.productName}>{item.productName}</Text>
-              <Text style={styles.productPrice}>${item.productPrice}</Text>
-            </View>
-          ))}
-        </ScrollView>
+              <Text style={styles.productName}>{item.item || 'Unknown Item'}</Text>
+              <Text style={styles.productPrice}>${item.id || '0.00'}</Text>
+            </TouchableOpacity>
+          )}
+          keyExtractor={(item) => item.id}
+          snapToAlignment="start"
+          decelerationRate="fast"
+          snapToInterval={(width - 40) / 2} 
+        />
       </View>
     </ScrollView>
   );

@@ -4,7 +4,7 @@ import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useLocalSearchParams } from "expo-router";
 import { db } from '../../configs/firebase';
-import { doc, getDoc,setDoc } from 'firebase/firestore';
+import { doc, getDoc,setDoc,updateDoc ,arrayUnion} from 'firebase/firestore';
 import { getAuth } from "firebase/auth";
 import { collection, getDocs } from 'firebase/firestore';
 
@@ -12,6 +12,7 @@ export default function ProductDetails({ route }) {
   const navigation = useNavigation();
   const item = useLocalSearchParams();
   console.log(item.itemId);
+  const { itemId } = useLocalSearchParams();
 
   const [categories, setCategories] = useState([]);
   const [clothes, setClothes] = useState([]);
@@ -20,6 +21,47 @@ export default function ProductDetails({ route }) {
   const [isInCart, setIsInCart] = useState(false);
 
   // Fetch data from Firestore
+  const [isInRecentlyViewed, setIsInRecentlyViewed] = useState(false);
+
+
+
+  useEffect(() => {
+    const updateRecentlyViewed = async () => {
+      try {
+        const userId = getAuth().currentUser.uid; // Get current user ID
+        const userDocRef = doc(db, 'RecentlyView', userId);
+
+        // Check if the document exists
+        const userDocSnap = await getDoc(userDocRef);
+
+        if (userDocSnap.exists()) {
+          const items = userDocSnap.data().items || []; // Get existing items
+          setIsInRecentlyViewed(items.includes(itemId)); // Check if item is already added
+
+          // If the item is not in the list, add it
+          if (!items.includes(itemId)) {
+            await updateDoc(userDocRef, {
+              items: arrayUnion(itemId), // Add the item ID to the array
+            });
+            console.log(`Item ${itemId} added to RecentlyView.`);
+          }
+        } else {
+          // If the document doesn't exist, create it
+          await setDoc(userDocRef, {
+            items: [itemId], // Initialize with the item ID
+          });
+          setIsInRecentlyViewed(true);
+          console.log(`Created RecentlyView document for user ${userId}.`);
+        }
+      } catch (error) {
+        console.error('Error updating RecentlyView collection:', error);
+      }
+    };
+
+    if (itemId) {
+      updateRecentlyViewed();
+    }
+  }, [itemId]);
   useEffect(() => {
     const fetchData = async () => {
       try {

@@ -1,76 +1,113 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, Image, TouchableOpacity } from 'react-native';
-import { collection, getDocs } from 'firebase/firestore';
-import { auth, db } from '../../configs/firebase';
+import { View, Text, FlatList, Image, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
+import { doc, getDoc, updateDoc, arrayRemove } from 'firebase/firestore';
+import { auth, db } from './../../configs/firebase';  // Ensure your firebase config is correctly imported
+import { useFocusEffect } from '@react-navigation/native';  // Import the hook
 
 export default function Cart() {
   const [cartItems, setCartItems] = useState([]);
   const [loading, setLoading] = useState(true);
+  const user = auth.currentUser;
 
-  useEffect(() => {
-    const fetchCartItems = async () => {
+  // Use useFocusEffect to re-fetch cart items every time the page is focused
+  useFocusEffect(
+    React.useCallback(() => {
+      const fetchCartItems = async () => {
+        if (user) {
+          try {
+            const userId = user.uid;
+            const userDocRef = doc(db, 'cart', userId);
+            const userDocSnap = await getDoc(userDocRef);
+
+            if (userDocSnap.exists()) {
+              const items = userDocSnap.data().items || [];
+              setCartItems(items);
+              console.log(items);
+            } else {
+              console.log('No cart items found for this user.');
+            }
+          } catch (error) {
+            console.error('Error fetching cart items:', error);
+          } finally {
+            setLoading(false);
+          }
+        }
+      };
+
+      fetchCartItems();
+    }, [user])
+  );
+
+  // Function to remove an item from the cart
+  const removeFromCart = async (itemId) => {
+    if (user) {
       try {
-        const userId = auth.currentUser?.uid;
-        if (!userId) return;
+        const userId = user.uid;
+        const userDocRef = doc(db, 'cart', userId);
 
-        const cartRef = collection(db, 'users', userId, 'cart');
-        const cartSnapshot = await getDocs(cartRef);
+        // Check if itemId is valid before proceeding
+        if (!itemId) {
+          console.error('Invalid item ID:', itemId);
+          return;
+        }
 
-        const items = cartSnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
+        // Check if the item exists in the cart array
+        const itemToRemove = cartItems.find(item => item === itemId);
 
-        setCartItems(items);
+        if (!itemToRemove) {
+          console.error('Item not found in the cart.');
+          return;
+        }
+
+        // Update the Firestore document to remove the item
+        await updateDoc(userDocRef, {
+          items: arrayRemove(itemId)
+        });
+
+        // Update the local state
+        setCartItems((prevCartItems) => prevCartItems.filter((item) => item !== itemId));
       } catch (error) {
-        console.error("Error fetching cart items:", error);
-      } finally {
-        setLoading(false);
+        console.error('Error removing item from cart:', error);
       }
-    };
-
-    fetchCartItems();
-  }, []);
-
-  const calculateTotalPrice = () => {
-    return cartItems
-      .reduce((total, item) => total + Number(item.price || 0), 0)
-      .toFixed(2);
+    }
   };
 
-  if (loading) {
-    return <Text>Loading...</Text>;
-  }
-
-  if (!cartItems.length) {
-    return <Text>Your cart is empty.</Text>;
-  }
-
-  const renderItem = ({ item }) => (
+  const renderCartItem = ({ item }) => (
     <View style={styles.itemContainer}>
-      <Image source={{ uri: item.imageUrl }} style={styles.image} />
-      <View style={styles.infoContainer}>
-        <Text style={styles.itemName}>{item.name}</Text>
-        <Text style={styles.itemPrice}>Rs {item.price}</Text>
-        <TouchableOpacity style={styles.removeButton}>
-          <Text style={styles.removeButtonText}>Remove</Text>
-        </TouchableOpacity>
+      <Image source={{ uri: item.imageUrl }} style={styles.itemImage} />
+      <View style={styles.itemDetails}>
+        <Text style={styles.itemTitle}>{item}</Text>
+        <Text style={styles.itemDescription}>
+          {item.description ? item.description.slice(0, 50) + '...' : 'No description available.'}
+        </Text>
+        <Text style={styles.itemPrice}>Rs {item.price ? item.price : 'N/A'}</Text>
       </View>
+      <TouchableOpacity style={styles.removeButton} onPress={() => removeFromCart(item)}>
+        <Text style={styles.removeButtonText}>Remove</Text>
+      </TouchableOpacity>
     </View>
   );
 
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#007bff" />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
-      <FlatList
-        data={cartItems}
-        renderItem={renderItem}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContainer}
-      />
-      <View style={styles.totalContainer}>
-        <Text style={styles.totalText}>Total Price:</Text>
-        <Text style={styles.totalPrice}>Rs {calculateTotalPrice()}</Text>
-      </View>
+      {cartItems.length > 0 ? (
+        <FlatList
+          data={cartItems}
+          renderItem={renderCartItem}
+          keyExtractor={(item) => item.id || item.title}
+          contentContainerStyle={styles.listContent}
+        />
+      ) : (
+        <Text style={styles.emptyMessage}>Your cart is empty.</Text>
+      )}
     </View>
   );
 }
@@ -78,71 +115,64 @@ export default function Cart() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: 'white',
     padding: 16,
-    backgroundColor: '#f5f5f5',
     paddingTop: 25,
   },
-  listContainer: {
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  listContent: {
     paddingBottom: 16,
   },
   itemContainer: {
     flexDirection: 'row',
-    marginBottom: 16,
-    padding: 8,
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    elevation: 2,
-  },
-  image: {
-    width: 80,
-    height: 80,
+    alignItems: 'center',
+    backgroundColor: '#f9f9f9',
+    padding: 16,
+    marginBottom: 10,
     borderRadius: 8,
   },
-  infoContainer: {
+  itemImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 8,
+    marginRight: 16,
+  },
+  itemDetails: {
     flex: 1,
-    paddingLeft: 12,
-    justifyContent: 'center',
   },
-  itemName: {
+  itemTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#333',
+  },
+  itemDescription: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 4,
   },
   itemPrice: {
     fontSize: 14,
-    color: '#888',
-    marginVertical: 4,
+    color: '#333',
+    fontWeight: 'bold',
+    marginTop: 4,
   },
   removeButton: {
-    marginTop: 8,
-    paddingVertical: 4,
+    paddingVertical: 6,
     paddingHorizontal: 12,
-    backgroundColor: '#ff5c5c',
-    borderRadius: 6,
+    backgroundColor: '#ff4d4f',
+    borderRadius: 4,
   },
   removeButtonText: {
-    color: '#fff',
-    fontSize: 14,
+    color: 'white',
+    fontWeight: 'bold',
   },
-  totalContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 8,
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    elevation: 2,
-    marginTop: 16,
-  },
-  totalText: {
+  emptyMessage: {
+    textAlign: 'center',
+    color: '#888',
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  totalPrice: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#007bff',
+    marginTop: 20,
   },
 });
