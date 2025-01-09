@@ -6,6 +6,7 @@ import { Text, View, FlatList, TouchableOpacity, Image, StyleSheet, Dimensions }
 import { useRouter } from 'expo-router'; // Assuming you are using next/router for navigation
 
 const { width } = Dimensions.get('window');  // Get screen width for calculating carousel item size
+const itemWidth = (width - 40) / 2;  // Subtract 40 for margin and then divide by 2 for 2 columns
 
 export default function ClothingDetails() {
   const [clothes, setClothes] = useState<any[]>([]); // Array to hold clothing details
@@ -37,9 +38,6 @@ export default function ClothingDetails() {
               const clothesSnap = await getDoc(clothesRef);
 
               if (clothesSnap.exists()) {
-                // Log the entire document structure (not just path)
-                console.log('Cloth data:', clothesSnap.data());
-
                 // Add clothing details to the fetchedClothes array
                 fetchedClothes.push(clothesSnap.data());
               } else {
@@ -75,38 +73,46 @@ export default function ClothingDetails() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.header}>Clothing Details</Text>
+      <Text style={styles.header}>{item.categoryId}</Text>
 
       <View style={styles.carouselSection}>
         <Text style={styles.sectionTitle}>Clothes Collection</Text>
-         <FlatList
-                   data={clothes}
-                   horizontal
-                   ref={flatListRef}
-                   showsHorizontalScrollIndicator={false}
-                   renderItem={({ item }) => (
-                     <TouchableOpacity 
-                       style={styles.productCard} 
-                       onPress={() => router.push({
-                         pathname: '/Product/productDetails',
-                         params: { itemId: item.clotheId },
-                       })}
-                     >
-                       <Image 
-                         source={{ uri: item.imgUrl || 'https://via.placeholder.com/150' }} 
-                         style={styles.productImage} 
-                       />
-                       <Text style={styles.productName}>{item.name || 'Unknown Item'}</Text>
-              <Text style={styles.productName}>{item.clotheId || 'Unknown Item'}</Text>
-              <Text style={styles.productPrice}>${item.price || '0.00'}</Text>
-                     </TouchableOpacity>
-                   )}
-                   keyExtractor={(item) => item.id}
-                   snapToAlignment="start"
-                   decelerationRate="fast"
-                   snapToInterval={(width - 40) / 2} 
-                 />
-        
+        <FlatList
+          data={clothes}
+          horizontal={false} // This should be false for a vertical list
+          numColumns={2} // Set to 2 to display items in two columns
+          ref={flatListRef}
+          showsHorizontalScrollIndicator={false}
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={[styles.productCard, { width: itemWidth }]} // Ensure all items have the same width
+              onPress={() =>
+                router.push({
+                  pathname: '/Product/productDetails',
+                  params: { itemId: item.clotheId },
+                })
+              }
+            >
+              <Image
+                source={{ uri: item.imgUrl || 'https://via.placeholder.com/150' }}
+                style={styles.productImage}
+              />
+              <Text style={styles.productName}>{item.name || 'Unknown Item'}</Text>
+              
+              <View style={styles.row}>
+  <Text style={[styles.productPrice, { marginRight: 40 }]}>
+    ${item.price || '0.00'}
+  </Text>
+  <Text style={styles.productDiscount}>
+    {item.discount ? item.discount : ""}
+  </Text>
+</View>
+
+            </TouchableOpacity>
+          )}
+          keyExtractor={(item) => item.clotheId}
+          contentContainerStyle={styles.flatListContent} // Add padding/margin
+        />
       </View>
     </View>
   );
@@ -114,49 +120,71 @@ export default function ClothingDetails() {
 
 const styles = StyleSheet.create({
   container: {
-    padding: 20,
+    padding: 10,
   },
   header: {
-    fontSize: 24,
+    marginTop: 20,
+    fontSize: 30,
     fontWeight: 'bold',
-    marginBottom: 20,
+    marginBottom: 0,
   },
   carouselSection: {
     marginTop: 30,
   },
   sectionTitle: {
     fontSize: 20,
+    marginLeft:10,
     fontWeight: 'bold',
     marginBottom: 15,
   },
   productCard: {
-    width: (width - 40) / 2, // Adjust for horizontal layout
-    marginRight: 20,
-    borderRadius: 8,
+    width: 110,  // Set a fixed width for the product card
+    margin: 3,   // Space between items
+    borderRadius: 10,
     backgroundColor: '#fff',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 5,
-    elevation: 5,
+    elevation: 10,
     padding: 10,
     alignItems: 'center',
+    height: 210, // Uniform height for all product cards
   },
+  
   productImage: {
     width: '100%',
-    height: 150,
+    height: 120, // Ensure all images fit well in the same height
     borderRadius: 8,
     marginBottom: 10,
   },
   productName: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
-    textAlign: 'center',
+    
     marginBottom: 5,
   },
+  productId: {
+    fontSize: 12,
+    color: '#777',
+    marginBottom: 5,
+  },
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   productPrice: {
+    fontSize: 17,
+    fontWeight: 'bold',
+    color: "#fe380e",
+  },
+  productDiscount: {
     fontSize: 14,
-    color: '#555',
+    color: "#53b21c",
+  },
+  flatListContent: {
+    paddingLeft: 5, // Space before the first card
   },
   text: {
     fontSize: 16,

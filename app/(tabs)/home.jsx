@@ -9,7 +9,14 @@ import {
   TouchableOpacity,
   Dimensions,
 } from "react-native";
-import { collection, getDocs, doc, getDoc, updateDoc, arrayUnion } from "firebase/firestore";
+import {
+  collection,
+  getDocs,
+  doc,
+  getDoc,
+  updateDoc,
+  arrayUnion,
+} from "firebase/firestore";
 import { db } from "../../configs/firebase";
 import { useRouter } from "expo-router";
 import { getAuth } from "firebase/auth";
@@ -154,9 +161,14 @@ export default function Home() {
                 style={styles.productImage}
               />
               <Text style={styles.productName}>
-                {item.item || "Unknown Item"}
+                {item.name || "Unknown Item"}
               </Text>
-              <Text style={styles.productPrice}>${item.id || "0.00"}</Text>
+              <View style={styles.priceRow}>
+                <Text style={styles.productPrice}>${item.price || "0.00"}</Text>
+                <Text style={styles.productDiscount}>
+                  ${item.discount || "0.00"}
+                </Text>
+              </View>
             </TouchableOpacity>
           )}
           keyExtractor={(item) => item.id}
@@ -184,10 +196,7 @@ export default function Home() {
                     items: arrayUnion(itemId),
                   });
                 } catch (error) {
-                  console.error(
-                    "Error updating recently viewed items:",
-                    error
-                  );
+                  console.error("Error updating recently viewed items:", error);
                 }
 
                 router.push({
@@ -203,9 +212,14 @@ export default function Home() {
                 style={styles.productImage}
               />
               <Text style={styles.productName}>
-                {item.item || "Unknown Item"}
+                {item.name || "Unknown Item"}
               </Text>
-              <Text style={styles.productPrice}>${item.id || "0.00"}</Text>
+              <View style={styles.priceRow}>
+                <Text style={styles.productPrice}>${item.price || "0.00"}</Text>
+                <Text style={styles.productDiscount}>
+                  ${item.discount || "0.00"}
+                </Text>
+              </View>
             </TouchableOpacity>
           )}
           keyExtractor={(item) => item.id}
@@ -217,8 +231,6 @@ export default function Home() {
     </ScrollView>
   );
 }
-
-
 
 const styles = StyleSheet.create({
   container: {
@@ -286,5 +298,19 @@ const styles = StyleSheet.create({
   },
   recentlyViewedSection: {
     marginBottom: 30,
+  },
+  priceRow: {
+    flexDirection: "row",
+    justifyContent: "space-between", // Adjust spacing between the two items
+    alignItems: "center", // Align vertically if needed
+  },
+  productPrice: {
+    fontSize: 16,
+    color: "#fe380e",
+    fontWeight: "bold",
+  },
+  productDiscount: {
+    fontSize: 15,
+    color: "#53b21c",
   },
 });

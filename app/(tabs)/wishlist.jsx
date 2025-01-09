@@ -1,13 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, FlatList, Image, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
 import { doc, getDoc, updateDoc, arrayRemove } from 'firebase/firestore';
-import { auth, db } from './../../configs/firebase';  // Ensure your firebase config is correctly imported
-import { useFocusEffect } from '@react-navigation/native';  // Import the hook
+import { auth, db } from './../../configs/firebase'; // Ensure your firebase config is correctly imported
+import { useFocusEffect } from '@react-navigation/native'; // Import the hook
+import { useRouter } from "expo-router";
+import { MaterialIcons } from '@expo/vector-icons'; // Or use another icon library
 
 export default function Wishlist() {
   const [wishlist, setWishlist] = useState([]);
   const [loading, setLoading] = useState(true);
   const user = auth.currentUser;
+  const router = useRouter();
 
   // Use useFocusEffect to re-fetch wishlist every time the page is focused
   useFocusEffect(
@@ -21,10 +24,24 @@ export default function Wishlist() {
 
             if (userDocSnap.exists()) {
               const wishlistItems = userDocSnap.data().items || [];
-              setWishlist(wishlistItems);
-              console.log(wishlistItems)
+              const fetchedClothes = [];
+
+              // Fetch clothes details based on IDs
+              for (const id of wishlistItems) {
+                const clothesRef = doc(db, 'clothes', id);
+                const clothesSnap = await getDoc(clothesRef);
+
+                if (clothesSnap.exists()) {
+                  fetchedClothes.push({ id: clothesSnap.id, ...clothesSnap.data() });
+                }
+              }
+
+              // Reverse and limit to the last 10 items
+              const trimmedClothes = fetchedClothes.slice(-10).reverse();
+              setWishlist(trimmedClothes);
             } else {
               console.log('No wishlist found for this user.');
+              setWishlist([]);
             }
           } catch (error) {
             console.error('Error fetching wishlist:', error);
@@ -35,7 +52,7 @@ export default function Wishlist() {
       };
 
       fetchWishlist();
-    }, [user])  // Dependency array ensures it runs only when `user` changes
+    }, [user]) // Dependency array ensures it runs only when `user` changes
   );
 
   // Function to remove an item from the wishlist
@@ -44,54 +61,48 @@ export default function Wishlist() {
       try {
         const userId = user.uid;
         const userDocRef = doc(db, 'wishlist', userId);
-        console.log(itemId);
-  
-        // Check if itemId is valid before proceeding
-        if (!itemId) {
-          console.error('Invalid item ID:', itemId);
-          return;  // Exit early if the itemId is not valid
-        }
-  
-        // Check if the item exists in the wishlist array
-        const itemToRemove = wishlist.find(item => item === itemId);  // Simple string match
-  
-        if (!itemToRemove) {
-          console.error('Item not found in the wishlist.');
-          return;  // Exit early if the item is not found
-        }
-  
-        // Update the Firestore document to remove the item by its string value
+
+        // Update Firestore document to remove the item
         await updateDoc(userDocRef, {
-          items: arrayRemove(itemId)  // Remove the exact string item
+          items: arrayRemove(itemId),
         });
-  
-        // Update the local state to reflect the removal
-        setWishlist((prevWishlist) => prevWishlist.filter((item) => item !== itemId));
+
+        // Update local state
+        setWishlist((prevWishlist) => prevWishlist.filter((item) => item.id !== itemId));
       } catch (error) {
         console.error('Error removing item from wishlist:', error);
       }
     }
   };
-  
-  
-  
 
   const renderWishlistItem = ({ item }) => (
+    
     <View style={styles.itemContainer}>
+      
+                  <TouchableOpacity
+              style={styles.itemContainer}
+              onPress={() =>
+                router.push({
+                  pathname: "Product/productDetails",
+                  params: { itemId: item.id },
+                })
+              }
+            >
       <Image source={{ uri: item.imageUrl }} style={styles.itemImage} />
       <View style={styles.itemDetails}>
-        <Text style={styles.itemTitle}>{item}</Text>
+        <Text style={styles.itemTitle}>{item.name || 'Unnamed Item'}</Text>
         <Text style={styles.itemDescription}>
           {item.description ? item.description.slice(0, 50) + '...' : 'No description available.'}
         </Text>
-        <Text style={styles.itemPrice}>Rs {item.price ? item.price : 'N/A'}</Text>
+        <Text style={styles.itemPrice}>Rs {item.price || 'N/A'}</Text>
       </View>
-      <TouchableOpacity style={styles.removeButton} onPress={() => removeFromWishlist(item)}>
-        <Text style={styles.removeButtonText}>Remove</Text>
+      <TouchableOpacity style={styles.removeButton} onPress={() => removeFromWishlist(item.id)}>
+  <MaterialIcons name="delete" size={24} color="red" />
+</TouchableOpacity>
+
       </TouchableOpacity>
     </View>
   );
-  
 
   if (loading) {
     return (
@@ -103,11 +114,16 @@ export default function Wishlist() {
 
   return (
     <View style={styles.container}>
+      <View style={styles.headerRow}>
+  <Text style={styles.header}>Wishlist</Text>
+  
+</View>
+
       {wishlist.length > 0 ? (
         <FlatList
           data={wishlist}
           renderItem={renderWishlistItem}
-          keyExtractor={(item) => item.id || item.title}  // Use a unique id if available
+          keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
         />
       ) : (
@@ -136,7 +152,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#f9f9f9',
-    padding: 16,
+    padding: 6,
     marginBottom: 10,
     borderRadius: 8,
   },
@@ -164,15 +180,27 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginTop: 4,
   },
-  removeButton: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    backgroundColor: '#ff4d4f',
-    borderRadius: 4,
-  },
+
   removeButtonText: {
     color: 'white',
     fontWeight: 'bold',
+  },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  header: {
+    marginTop: 30,
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  itemPrice: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#e63821',
   },
   emptyMessage: {
     textAlign: 'center',
