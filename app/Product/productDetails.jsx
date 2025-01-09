@@ -30,38 +30,41 @@ export default function ProductDetails({ route }) {
       try {
         const userId = getAuth().currentUser.uid; // Get current user ID
         const userDocRef = doc(db, 'RecentlyView', userId);
-
+    
         // Check if the document exists
         const userDocSnap = await getDoc(userDocRef);
-
+    
         if (userDocSnap.exists()) {
           const items = userDocSnap.data().items || []; // Get existing items
-          setIsInRecentlyViewed(items.includes(itemId)); // Check if item is already added
-
-          // If the item is not in the list, add it
-          if (!items.includes(itemId)) {
-            await updateDoc(userDocRef, {
-              items: arrayUnion(itemId), // Add the item ID to the array
-            });
-            console.log(`Item ${itemId} added to RecentlyView.`);
-          }
+    
+          // Remove the current item if it exists in the array (to avoid duplicates)
+          const updatedItems = items.filter((id) => id !== itemId);
+    
+          // Add the new item to the beginning of the array
+          updatedItems.unshift(itemId);
+    
+          // Trim the array to keep only the last 10 items
+          const trimmedItems = updatedItems.slice(0, 10);
+    
+          // Update the Firestore document with the trimmed list
+          await updateDoc(userDocRef, { items: trimmedItems });
+          console.log(`Item ${itemId} added to RecentlyView and trimmed to 10 items.`);
         } else {
           // If the document doesn't exist, create it
-          await setDoc(userDocRef, {
-            items: [itemId], // Initialize with the item ID
-          });
-          setIsInRecentlyViewed(true);
-          console.log(`Created RecentlyView document for user ${userId}.`);
+          await setDoc(userDocRef, { items: [itemId] });
+          console.log(`Created RecentlyView document for user ${userId} with initial item.`);
         }
       } catch (error) {
         console.error('Error updating RecentlyView collection:', error);
       }
     };
+    
 
     if (itemId) {
       updateRecentlyViewed();
     }
   }, [itemId]);
+  
   useEffect(() => {
     const fetchData = async () => {
       try {
