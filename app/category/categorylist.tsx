@@ -94,7 +94,7 @@ export default function ClothingDetails() {
               }
             >
               <Image
-                source={{ uri: item.imgUrl || 'https://via.placeholder.com/150' }}
+                source={{ uri: item.Image || 'https://via.placeholder.com/150' }}
                 style={styles.productImage}
               />
               <Text style={styles.productName}>{item.name || 'Unknown Item'}</Text>
@@ -149,7 +149,7 @@ const styles = StyleSheet.create({
     elevation: 10,
     padding: 10,
     alignItems: 'center',
-    height: 210, // Uniform height for all product cards
+    height: 220, // Uniform height for all product cards
   },
   
   productImage: {

@@ -86,7 +86,7 @@ export default function Cart() {
           })
         }
       >
-        <Image source={{ uri: item.imageUrl }} style={styles.itemImage} />
+        <Image source={{ uri: item.Image }} style={styles.itemImage} />
         <View style={styles.itemDetails}>
           <Text style={styles.itemTitle}>{item.name || 'Unnamed Item'}</Text>
           <Text style={styles.itemDescription}>

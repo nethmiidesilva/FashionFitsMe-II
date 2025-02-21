@@ -88,13 +88,13 @@ export default function Wishlist() {
                 })
               }
             >
-      <Image source={{ uri: item.imageUrl }} style={styles.itemImage} />
+      <Image source={{ uri: item.Image }} style={styles.itemImage} />
       <View style={styles.itemDetails}>
         <Text style={styles.itemTitle}>{item.name || 'Unnamed Item'}</Text>
         <Text style={styles.itemDescription}>
           {item.description ? item.description.slice(0, 50) + '...' : 'No description available.'}
         </Text>
-        <Text style={styles.itemPrice}>Rs {item.price || 'N/A'}</Text>
+        <Text style={styles.itemPrice}>$ {item.price || 'N/A'}</Text>
       </View>
       <TouchableOpacity style={styles.removeButton} onPress={() => removeFromWishlist(item.id)}>
   <MaterialIcons name="delete" size={24} color="red" />

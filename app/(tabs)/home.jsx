@@ -156,7 +156,7 @@ export default function Home() {
             >
               <Image
                 source={{
-                  uri: item.imgUrl || "https://via.placeholder.com/150",
+                  uri: item.Image || "https://via.placeholder.com/150",
                 }}
                 style={styles.productImage}
               />
@@ -207,7 +207,7 @@ export default function Home() {
             >
               <Image
                 source={{
-                  uri: item.imgUrl || "https://via.placeholder.com/150",
+                  uri: item.Image || "https://via.placeholder.com/150",
                 }}
                 style={styles.productImage}
               />

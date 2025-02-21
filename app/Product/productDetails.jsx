@@ -210,7 +210,7 @@ export default function ProductDetails({ route }) {
     <ScrollView style={styles.container}>
       {product ? (
         <>
-          <Image source={{ uri: product.imgUrl }} style={styles.productImage} />
+          <Image source={{ uri: product.Image }} style={styles.productImage} />
           <View style={styles.detailsContainer}>
             <Text style={styles.productName}>{product.name}</Text>
             <Text style={styles.productPrice}>${product.price}</Text>
