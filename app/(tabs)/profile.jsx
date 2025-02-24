@@ -1,27 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Image, FlatList, Dimensions, TouchableOpacity, Alert } from 'react-native';
-import { doc, getDoc, collection, getDocs, DocumentData } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { auth, db } from '../../configs/firebase';
 import { useRouter } from 'expo-router';
 
 const screenHeight = Dimensions.get('window').height;
 
-interface Order {
-  productName: string;
-  price: number;
-}
-
-interface OrderWithId extends Order {
-  id: string;
-}
-
 export default function Profile() {
   const router = useRouter();
-  const [username, setUsername] = useState<string>('John Doe');
-  const [email, setEmail] = useState<string>('johndoe@example.com');
-  const [orders, setOrders] = useState<OrderWithId[]>([
-    
+  const [username, setUsername] = useState('John Doe');
+  const [email, setEmail] = useState('johndoe@example.com');
+  const [orders, setOrders] = useState([
+    // You can replace this with your actual order data
   ]);
 
   const handleLogout = async () => {
@@ -35,15 +25,13 @@ export default function Profile() {
     }
   };
 
-  const renderOrderItem = ({ item }: { item: OrderWithId }) => (
+  const renderOrderItem = ({ item }) => (
     <View style={styles.orderItem}>
       <View style={styles.orderDetails}>
         <Text style={styles.orderText}>{item.productName}</Text>
         <Text style={styles.orderText}>Price: Rs {item.price}</Text>
       </View>
-      <TouchableOpacity
-        style={styles.detailsButton}
-      >
+      <TouchableOpacity style={styles.detailsButton}>
         <Text style={styles.buttonText}>View Details</Text>
       </TouchableOpacity>
     </View>
