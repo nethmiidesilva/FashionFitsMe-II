@@ -6,6 +6,7 @@ import {
   Image,
   TouchableOpacity,
   ScrollView,
+  FlatList,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import Icon from "react-native-vector-icons/Ionicons";
@@ -15,10 +16,12 @@ import { doc, getDoc, setDoc, updateDoc, arrayUnion } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 import { collection, getDocs } from "firebase/firestore";
 
+// Import for Algolia
+import algoliasearch from 'algoliasearch/lite';
+
 export default function ProductDetails({ route }) {
   const navigation = useNavigation();
   const item = useLocalSearchParams();
-  console.log(item.itemId);
   const { itemId } = useLocalSearchParams();
 
   const [categories, setCategories] = useState([]);
@@ -26,6 +29,92 @@ export default function ProductDetails({ route }) {
   const [recentlyViewed, setRecentlyViewed] = useState([]);
   const [isWishlisted, setIsInWishlist] = useState(false);
   const [isInCart, setIsInCart] = useState(false);
+  const [similarProducts, setSimilarProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  // Initialize Algolia client
+  const searchClient = algoliasearch('VIX0G4CQXG', 'e28a685420a7303098b8683c143e094d');
+  const index = searchClient.initIndex('clothes');
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        const clothesCollection = collection(db, "clothes");
+        const clothesSnapshot = await getDocs(clothesCollection);
+        const clothesData = clothesSnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+        setClothes(clothesData);
+        setLoading(false);
+      } catch (error) {
+        console.error("Error fetching data:", error);
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  // Find the current product
+  const product = clothes.find((cloth) => cloth.id === itemId);
+
+  // Fetch similar products from Algolia
+  useEffect(() => {
+    const fetchSimilarProducts = async () => {
+      if (itemId && product && product.category) {
+        try {
+          console.log(`Searching for products with category: ${product.category}`);
+          
+          // Use search instead of findSimilarObjects
+          const { hits } = await index.search('', {
+            filters: `category:'${product.category}' AND NOT objectID:'${itemId}'`,
+            hitsPerPage: 5
+          });
+          
+          console.log('Algolia hits:', hits);
+          
+          if (hits && hits.length > 0) {
+            // Map Algolia data to match our expected format
+            const formattedHits = hits.map(hit => ({
+              id: hit.objectID,
+              name: hit.name,
+              price: hit.price,
+              Image: hit.Image, // Make sure this field matches in Algolia
+              brand: hit.brand,
+              category: hit.category
+            }));
+            
+            setSimilarProducts(formattedHits);
+            console.log('Similar products fetched and formatted:', formattedHits);
+          } else {
+            console.log('No hits from Algolia, using fallback');
+            useFallbackSimilarProducts();
+          }
+        } catch (error) {
+          console.error('Error fetching similar products from Algolia:', error);
+          useFallbackSimilarProducts();
+        }
+      }
+    };
+
+    const useFallbackSimilarProducts = () => {
+      // Fallback method: use firestore to get random products from the same category
+      if (product && product.category) {
+        const fallbackSimilar = clothes
+          .filter(item => item.category === product.category && item.id !== itemId)
+          .slice(0, 5);
+        
+        console.log('Using fallback similar products:', fallbackSimilar);
+        setSimilarProducts(fallbackSimilar);
+      }
+    };
+
+    if (clothes.length > 0 && itemId && product) {
+      fetchSimilarProducts();
+    }
+  }, [itemId, clothes, product]);
 
   // Fetch data from Firestore
   const [isInRecentlyViewed, setIsInRecentlyViewed] = useState(false);
@@ -72,28 +161,6 @@ export default function ProductDetails({ route }) {
       updateRecentlyViewed();
     }
   }, [itemId]);
-
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const clothesCollection = collection(db, "clothes");
-        const clothesSnapshot = await getDocs(clothesCollection);
-        const clothesData = clothesSnapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-        setClothes(clothesData);
-        //console.log(clothesData);
-      } catch (error) {
-        console.error("Error fetching data:", error);
-      }
-    };
-
-    fetchData();
-    const wishlist = collection(db, "wishlist");
-    const clothesSnapshot = getDocs(wishlist);
-    //console.log(clothesSnapshot);
-  }, []);
 
   useEffect(() => {
     // Check if the item is in the wishlist on component mount
@@ -204,11 +271,20 @@ export default function ProductDetails({ route }) {
       console.error("Error updating cart:", error);
     }
   };
-  const product = clothes.find((cloth) => cloth.id === item.itemId);
+  
+  // Navigate to the product detail page for the selected recommendation
+  const navigateToProduct = (productId) => {
+    console.log("Navigating to product:", productId);
+    
+    // Reset the screen with new params
+    navigation.push("Product/productDetails", { itemId: productId });
+  };
 
   return (
     <ScrollView style={styles.container}>
-      {product ? (
+      {loading ? (
+        <Text style={styles.loadingText}>Loading...</Text>
+      ) : product ? (
         <>
           <Image source={{ uri: product.Image }} style={styles.productImage} />
           <View style={styles.detailsContainer}>
@@ -245,6 +321,40 @@ export default function ProductDetails({ route }) {
 
             <Text style={styles.productDescription}>{product.description}</Text>
 
+            {/* Similar Products Section */}
+            {similarProducts.length > 0 && (
+              <View style={styles.recommendationsContainer}>
+                <Text style={styles.recommendationsTitle}>You Might Also Like:</Text>
+                <FlatList
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  data={similarProducts}
+                  keyExtractor={(item) => item.id || item.objectID || Math.random().toString()}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity 
+                      style={styles.recommendedProductCard}
+                      onPress={() => navigateToProduct(item.id || item.objectID)}
+                    >
+                      <Image 
+                        source={{ uri: item.Image }} 
+                        style={styles.recommendedProductImage} 
+                        resizeMode="cover"
+                      />
+                      <Text style={styles.recommendedProductName} numberOfLines={1}>
+                        {item.name}
+                      </Text>
+                      <Text style={styles.recommendedProductPrice}>
+                        ${item.price}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                  ListEmptyComponent={
+                    <Text style={styles.noSimilarProducts}>No similar products found</Text>
+                  }
+                />
+              </View>
+            )}
+
             {/* Reviews Section */}
             <View style={styles.reviewsContainer}>
               <Text style={styles.reviewsTitle}>Customer Reviews:</Text>
@@ -274,7 +384,7 @@ export default function ProductDetails({ route }) {
           <View style={styles.actionBar}>
             <TouchableOpacity
               style={styles.actionButton}
-              onPress={() => addToWishlist(item.itemId)} // Corrected: Function call wrapped in an anonymous function
+              onPress={() => addToWishlist(item.itemId)}
             >
               <Icon
                 name="heart"
@@ -285,7 +395,7 @@ export default function ProductDetails({ route }) {
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.actionButton}
-              onPress={() => addToCart(item.itemId)} // Corrected: Function call wrapped in an anonymous function
+              onPress={() => addToCart(item.itemId)}
             >
               <Icon
                 name="cart"
@@ -297,7 +407,7 @@ export default function ProductDetails({ route }) {
           </View>
         </>
       ) : (
-        <Text style={styles.productName}>Loading .......</Text>
+        <Text style={styles.productName}>Product not found</Text>
       )}
     </ScrollView>
   );
@@ -307,6 +417,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#f5f5f5",
+  },
+  loadingText: {
+    fontSize: 18,
+    textAlign: 'center',
+    marginTop: 50,
   },
   productImage: {
     width: "100%",
@@ -356,6 +471,51 @@ const styles = StyleSheet.create({
     color: "#666",
     marginTop: 10,
     lineHeight: 22,
+  },
+  // Recommendations styles
+  recommendationsContainer: {
+    marginTop: 20,
+    marginBottom: 10,
+  },
+  recommendationsTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    marginBottom: 10,
+    color: "#333",
+  },
+  recommendedProductCard: {
+    width: 140,
+    marginRight: 12,
+    backgroundColor: "#fff",
+    borderRadius: 10,
+    padding: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 1,
+    elevation: 2,
+  },
+  recommendedProductImage: {
+    width: "100%",
+    height: 120,
+    borderRadius: 8,
+    marginBottom: 5,
+    backgroundColor: "#f0f0f0", // Placeholder background
+  },
+  recommendedProductName: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#333",
+  },
+  recommendedProductPrice: {
+    fontSize: 14,
+    fontWeight: "bold",
+    color: "#ff6b6b",
+  },
+  noSimilarProducts: {
+    fontSize: 14,
+    color: "#999",
+    fontStyle: "italic",
   },
   reviewsContainer: {
     marginTop: 20,
