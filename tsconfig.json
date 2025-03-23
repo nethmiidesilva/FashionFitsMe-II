@@ -19,6 +19,6 @@
     "expo-env.d.ts",
     "app/_layout.tsx",
     "app/(tabs)/home.tsx"
-, "app/(tabs)/search.jsx", "app/(tabs)/search.jsx", "app/(tabs)/search.jsx", "app/(tabs)/profile.jsx"  ],
+, "app/(tabs)/search.jsx", "app/(tabs)/search.jsx", "app/(tabs)/search.jsx", "app/(tabs)/profile.jsx", "components/Checkout.jsx"  ],
   "extends": "expo/tsconfig.base"
 }

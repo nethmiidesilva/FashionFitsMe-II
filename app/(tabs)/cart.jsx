@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, Image, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, FlatList, Image, TouchableOpacity, ActivityIndicator, StyleSheet, Alert } from 'react-native';
 import { doc, getDoc, updateDoc, arrayRemove } from 'firebase/firestore';
-import { auth, db } from './../../configs/firebase'; // Ensure your firebase config is correctly imported
-import { useFocusEffect } from '@react-navigation/native'; // Import the hook
+import { signOut } from 'firebase/auth';
+import { auth, db } from './../../configs/firebase';
+import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from "expo-router";
-import { MaterialIcons } from '@expo/vector-icons'; // Or use another icon library
+import { MaterialIcons } from '@expo/vector-icons';
 
 export default function Cart() {
   const [cart, setCart] = useState([]);
@@ -12,7 +13,6 @@ export default function Cart() {
   const user = auth.currentUser;
   const router = useRouter();
 
-  // Use useFocusEffect to re-fetch cart every time the page is focused
   useFocusEffect(
     React.useCallback(() => {
       const fetchCart = async () => {
@@ -26,7 +26,6 @@ export default function Cart() {
               const cartItems = userDocSnap.data().items || [];
               const fetchedClothes = [];
 
-              // Fetch clothes details based on IDs
               for (const id of cartItems) {
                 const clothesRef = doc(db, 'clothes', id);
                 const clothesSnap = await getDoc(clothesRef);
@@ -36,11 +35,9 @@ export default function Cart() {
                 }
               }
 
-              // Reverse and limit to the last 10 items
               const trimmedClothes = fetchedClothes.slice(-10).reverse();
               setCart(trimmedClothes);
             } else {
-              console.log('No cart found for this user.');
               setCart([]);
             }
           } catch (error) {
@@ -52,22 +49,19 @@ export default function Cart() {
       };
 
       fetchCart();
-    }, [user]) // Dependency array ensures it runs only when `user` changes
+    }, [user])
   );
 
-  // Function to remove an item from the cart
   const removeFromCart = async (itemId) => {
     if (user) {
       try {
         const userId = user.uid;
         const userDocRef = doc(db, 'cart', userId);
 
-        // Update Firestore document to remove the item
         await updateDoc(userDocRef, {
           items: arrayRemove(itemId),
         });
 
-        // Update local state
         setCart((prevCart) => prevCart.filter((item) => item.id !== itemId));
       } catch (error) {
         console.error('Error removing item from cart:', error);
@@ -75,10 +69,24 @@ export default function Cart() {
     }
   };
 
+  const goToCheckout = (item) => {
+    router.push({
+      pathname: "checkout/Checkout",
+      params: { items: JSON.stringify([item]) }
+    });
+  };
+
+  const goToCheckoutAll = () => {
+    router.push({
+      pathname: "checkout/Checkout",
+      params: { items: JSON.stringify(cart) }
+    });
+  };
+
   const renderCartItem = ({ item }) => (
     <View style={styles.itemContainer}>
       <TouchableOpacity
-        style={styles.itemContainer}
+        style={styles.itemContent}
         onPress={() =>
           router.push({
             pathname: "Product/productDetails",
@@ -94,10 +102,24 @@ export default function Cart() {
           </Text>
           <Text style={styles.itemPrice}>Rs {item.price || 'N/A'}</Text>
         </View>
-        <TouchableOpacity style={styles.removeButton} onPress={() => removeFromCart(item.id)}>
-          <MaterialIcons name="delete" size={24} color="red" />
-        </TouchableOpacity>
       </TouchableOpacity>
+      
+      <View style={styles.actionContainer}>
+        <TouchableOpacity 
+          style={styles.checkoutButton} 
+          onPress={() => goToCheckout(item)}
+        >
+          <Text style={styles.checkoutButtonText}>Checkout</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          style={styles.removeButton} 
+          onPress={() => removeFromCart(item.id)}
+        >
+          <MaterialIcons name="delete" size={20} color="white" />
+          <Text style={styles.removeButtonText}>Remove</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 
@@ -116,12 +138,26 @@ export default function Cart() {
       </View>
 
       {cart.length > 0 ? (
-        <FlatList
-          data={cart}
-          renderItem={renderCartItem}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContent}
-        />
+        <View style={styles.cartContent}>
+          <FlatList
+            data={cart}
+            renderItem={renderCartItem}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.listContent}
+          />
+          
+          {cart.length > 1 && (
+            <View style={styles.checkoutAllContainer}>
+              <TouchableOpacity 
+                style={styles.checkoutAllButton} 
+                onPress={goToCheckoutAll}
+              >
+                <MaterialIcons name="shopping-cart" size={20} color="white" />
+                <Text style={styles.checkoutAllButtonText}>Checkout All Items</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
       ) : (
         <Text style={styles.emptyMessage}>Your cart is empty.</Text>
       )}
@@ -141,20 +177,32 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  cartContent: {
+    flex: 1,
+  },
   listContent: {
-    paddingBottom: 16,
+    paddingBottom: 80, // Provide space for the checkout all button
   },
   itemContainer: {
+    backgroundColor: '#f9f9f9',
+    marginBottom: 12,
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  itemContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f9f9f9',
-    padding: 6,
-    marginBottom: 10,
-    borderRadius: 8,
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
   },
   itemImage: {
-    width: 60,
-    height: 60,
+    width: 70,
+    height: 70,
     borderRadius: 8,
     marginRight: 16,
   },
@@ -171,39 +219,93 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   itemPrice: {
-    fontSize: 14,
-    color: '#333',
+    fontSize: 16,
     fontWeight: 'bold',
+    color: '#e63821',
     marginTop: 4,
   },
+  actionContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  checkoutButton: {
+    backgroundColor: '#007bff',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    flex: 1,
+    marginRight: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   removeButton: {
-    padding: 8,
+    backgroundColor: '#e63821',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkoutButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 14,
   },
   removeButtonText: {
     color: 'white',
     fontWeight: 'bold',
+    fontSize: 14,
+    marginLeft: 4,
   },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 16,
+    marginTop: 30,
   },
   header: {
-    marginTop: 30,
     fontSize: 24,
     fontWeight: 'bold',
     color: '#333',
-  },
-  itemPrice: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#e63821',
   },
   emptyMessage: {
     textAlign: 'center',
     color: '#888',
     fontSize: 18,
     marginTop: 20,
+  },
+  checkoutAllContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'white',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  checkoutAllButton: {
+    backgroundColor: '#007bff',
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+  },
+  checkoutAllButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 16,
+    marginLeft: 8,
   },
 });
