@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity, TextInput, FlatList, Alert, ActivityIndicator } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import { auth, storage, db } from '../../configs/firebase';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
@@ -59,12 +60,10 @@ export default function Profile() {
         ordersList.push({
           id: doc.id,
           ...data,
-          // Handle Firestore timestamp correctly
           createdAt: data.createdAt ? data.createdAt : new Date()
         });
       });
       
-      // Sort with proper handling of Firestore timestamps
       const sortedOrders = ordersList.sort((a, b) => {
         const dateA = a.createdAt instanceof Date ? a.createdAt : a.createdAt.toDate();
         const dateB = b.createdAt instanceof Date ? b.createdAt : b.createdAt.toDate();
@@ -82,16 +81,13 @@ export default function Profile() {
     try {
       setUpdatingOrderId(orderId);
       
-      // Reference to the order document
       const orderRef = doc(db, 'orders', orderId);
       
-      // Update the status field
       await updateDoc(orderRef, {
         status: 'Received',
         receivedAt: new Date()
       });
       
-      // Update the local state
       setOrders(prevOrders => 
         prevOrders.map(order => 
           order.id === orderId 
@@ -126,16 +122,8 @@ export default function Profile() {
     );
   };
 
-  // Modified to always return true for testing
   const isOrderReceivable = (order) => {
-    // For debugging - always show the button
     return true;
-    
-    // Original logic (we'll revert to this after debugging)
-    /*
-    const status = order?.status?.toLowerCase();
-    return status === 'shipped' || status === 'completed' || status === 'processing';
-    */
   };
 
   const pickImage = async () => {
@@ -163,10 +151,8 @@ export default function Profile() {
   };
 
   const renderOrderItem = ({ item }) => {
-    // Debug logging
     console.log("Rendering order item:", item.id, "Status:", item.status);
     
-    // Handle Firebase Timestamp or JavaScript Date object
     let dateObj;
     if (item.createdAt) {
       dateObj = item.createdAt instanceof Date 
@@ -271,21 +257,31 @@ export default function Profile() {
         </TouchableOpacity>
         <View style={styles.profileInfo}>
           {editing ? (
-            <TextInput style={styles.input} value={username} onChangeText={setUsername} autoFocus />
+            <View style={styles.editingContainer}>
+              <TextInput 
+                style={styles.input} 
+                value={username} 
+                onChangeText={setUsername} 
+                autoFocus 
+                placeholder="Enter username"
+              />
+              <TouchableOpacity style={styles.saveButton} onPress={saveProfile}>
+                <Feather name="check" size={18} color="white" />
+              </TouchableOpacity>
+            </View>
           ) : (
-            <Text style={styles.usernameText}>{username || 'Set username'}</Text>
+            <View style={styles.usernameContainer}>
+              <Text style={styles.usernameText}>{username || 'Set username'}</Text>
+              <TouchableOpacity 
+                style={styles.editIconButton} 
+                onPress={() => setEditing(true)}
+              >
+                <Feather name="edit" size={18} color="#007bff" />
+              </TouchableOpacity>
+            </View>
           )}
           <Text style={styles.emailText}>{email}</Text>
         </View>
-        {editing ? (
-          <TouchableOpacity style={styles.saveButton} onPress={saveProfile}>
-            <Text style={styles.saveButtonText}>Save</Text>
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity style={styles.editButton} onPress={() => setEditing(true)}>
-            <Text style={styles.editButtonText}>Edit</Text>
-          </TouchableOpacity>
-        )}
       </View>
 
       <Text style={styles.sectionTitle}>My Orders</Text>
@@ -366,44 +362,49 @@ const styles = StyleSheet.create({
   profileInfo: { 
     flex: 1 
   },
-  usernameText: { 
-    fontSize: 20, 
-    fontWeight: '700', 
-    color: '#333' 
-  },
-  emailText: { 
-    fontSize: 14, 
-    color: '#666', 
-    marginTop: 4 
+  editingContainer: {
+    flexDirection: 'row', 
+    alignItems: 'center',
+    justifyContent: 'space-between'
   },
   input: { 
     fontSize: 22, 
     fontWeight: '700', 
     color: '#333', 
     borderBottomWidth: 1, 
-    borderColor: '#007bff' 
+    borderColor: '#007bff',
+    flex: 1,
+    marginRight: 10
   },
-  editButton: { 
-    backgroundColor: '#007bff', 
-    paddingVertical: 8, 
-    paddingHorizontal: 16, 
-    borderRadius: 8 
+  usernameContainer: {
+    flexDirection: 'row', 
+    alignItems: 'center'
   },
-  editButtonText: { 
-    color: '#fff', 
+  usernameText: { 
+    fontSize: 20, 
+    fontWeight: '700', 
+    color: '#333',
+    marginRight: 8
+  },
+  emailText: { 
     fontSize: 14, 
-    fontWeight: '600' 
+    color: '#666', 
+    marginTop: 4 
+  },
+  editIconButton: {
+    padding: 4,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0, 123, 255, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   saveButton: { 
     backgroundColor: '#28a745', 
     paddingVertical: 8, 
-    paddingHorizontal: 16, 
-    borderRadius: 8 
-  },
-  saveButtonText: { 
-    color: '#fff', 
-    fontSize: 14, 
-    fontWeight: '600' 
+    paddingHorizontal: 12, 
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center'
   },
   sectionTitle: { 
     fontSize: 18, 
