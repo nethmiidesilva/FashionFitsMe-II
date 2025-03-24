@@ -72,14 +72,25 @@ export default function Cart() {
   const goToCheckout = (item) => {
     router.push({
       pathname: "checkout/Checkout",
-      params: { items: JSON.stringify([item]) }
+      params: { 
+        items: JSON.stringify([item]),
+        itemIds: JSON.stringify([item.id]), // Track item ID to remove
+        clearCart: "single" // Indicate we want to clear just this item
+      }
     });
   };
 
   const goToCheckoutAll = () => {
+    // Extract just the IDs for the clearCart functionality
+    const itemIds = cart.map(item => item.id);
+    
     router.push({
       pathname: "checkout/Checkout",
-      params: { items: JSON.stringify(cart) }
+      params: { 
+        items: JSON.stringify(cart),
+        itemIds: JSON.stringify(itemIds), // Add all item IDs
+        clearCart: "all" // Indicate we want to clear all items
+      }
     });
   };
 
@@ -147,15 +158,13 @@ export default function Cart() {
           />
           
           {cart.length > 1 && (
-            <View style={styles.checkoutAllContainer}>
-              <TouchableOpacity 
-                style={styles.checkoutAllButton} 
-                onPress={goToCheckoutAll}
-              >
-                <MaterialIcons name="shopping-cart" size={20} color="white" />
-                <Text style={styles.checkoutAllButtonText}>Checkout All Items</Text>
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity 
+              style={styles.checkoutAllButton} 
+              onPress={goToCheckoutAll}
+            >
+              <MaterialIcons name="shopping-cart" size={20} color="white" />
+              <Text style={styles.checkoutAllButtonText}>Checkout All Items</Text>
+            </TouchableOpacity>
           )}
         </View>
       ) : (
@@ -278,22 +287,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     marginTop: 20,
   },
-  checkoutAllContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: 'white',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 4,
-  },
   checkoutAllButton: {
     backgroundColor: '#007bff',
     paddingVertical: 12,
@@ -301,6 +294,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
+    marginHorizontal: 16,
+    marginBottom: 16,
   },
   checkoutAllButtonText: {
     color: 'white',
