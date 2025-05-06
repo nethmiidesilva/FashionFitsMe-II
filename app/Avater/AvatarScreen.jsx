@@ -1,78 +1,28 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
   View, 
   Text, 
   StyleSheet, 
-  ScrollView,
   TouchableOpacity, 
   ActivityIndicator, 
-  SafeAreaView, 
-  Alert,
-  Image
+  SafeAreaView
 } from 'react-native';
 import WebView from 'react-native-webview';
+import { doc, setDoc, updateDoc } from 'firebase/firestore';
+import { auth, db } from './../../configs/firebase';
 
 export default function AvatarScreen({ navigation }) {
   const [avatarUrl, setAvatarUrl] = useState(null);
   const [avatarId, setAvatarId] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('body');
+  const [isLoading, setIsLoading] = useState(false);
+  const [isWebViewLoading, setIsWebViewLoading] = useState(true);
+  const [modelLink, setModelLink] = useState(null);
+  const [savingToDb, setSavingToDb] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
   const webViewRef = useRef(null);
   
-  // Customization categories and options
-  const [customizationOptions, setCustomizationOptions] = useState({
-    body: [
-      { id: 'body_default', name: 'Default', imageUrl: '/api/placeholder/60/60' },
-      { id: 'body_athletic', name: 'Athletic', imageUrl: '/api/placeholder/60/60' },
-      { id: 'body_slim', name: 'Slim', imageUrl: '/api/placeholder/60/60' }
-    ],
-    face: [
-      { id: 'face_default', name: 'Default', imageUrl: '/api/placeholder/60/60' },
-      { id: 'face_round', name: 'Round', imageUrl: '/api/placeholder/60/60' },
-      { id: 'face_square', name: 'Square', imageUrl: '/api/placeholder/60/60' }
-    ],
-    hair: [
-      { id: 'hair_default', name: 'Default', imageUrl: '/api/placeholder/60/60' },
-      { id: 'hair_short', name: 'Short', imageUrl: '/api/placeholder/60/60' },
-      { id: 'hair_long', name: 'Long', imageUrl: '/api/placeholder/60/60' },
-      { id: 'hair_none', name: 'None', imageUrl: '/api/placeholder/60/60' }
-    ],
-    tops: [
-      { id: 'top_tshirt', name: 'T-Shirt', imageUrl: '/api/placeholder/60/60' },
-      { id: 'top_shirt', name: 'Shirt', imageUrl: '/api/placeholder/60/60' },
-      { id: 'top_sweater', name: 'Sweater', imageUrl: '/api/placeholder/60/60' },
-      { id: 'top_none', name: 'No Top', imageUrl: '/api/placeholder/60/60' }
-    ],
-    bottoms: [
-      { id: 'bottom_jeans', name: 'Jeans', imageUrl: '/api/placeholder/60/60' },
-      { id: 'bottom_shorts', name: 'Shorts', imageUrl: '/api/placeholder/60/60' },
-      { id: 'bottom_skirt', name: 'Skirt', imageUrl: '/api/placeholder/60/60' },
-      { id: 'bottom_none', name: 'No Bottom', imageUrl: '/api/placeholder/60/60' }
-    ],
-    shoes: [
-      { id: 'shoes_sneakers', name: 'Sneakers', imageUrl: '/api/placeholder/60/60' },
-      { id: 'shoes_boots', name: 'Boots', imageUrl: '/api/placeholder/60/60' },
-      { id: 'shoes_formal', name: 'Formal', imageUrl: '/api/placeholder/60/60' },
-      { id: 'shoes_none', name: 'No Shoes', imageUrl: '/api/placeholder/60/60' }
-    ],
-    accessories: [
-      { id: 'acc_glasses', name: 'Glasses', imageUrl: '/api/placeholder/60/60' },
-      { id: 'acc_hat', name: 'Hat', imageUrl: '/api/placeholder/60/60' },
-      { id: 'acc_jewelry', name: 'Jewelry', imageUrl: '/api/placeholder/60/60' },
-      { id: 'acc_none', name: 'None', imageUrl: '/api/placeholder/60/60' }
-    ]
-  });
-  
-  // Track selected options
-  const [selectedOptions, setSelectedOptions] = useState({
-    body: 'body_default',
-    face: 'face_default',
-    hair: 'hair_default',
-    tops: 'top_tshirt',
-    bottoms: 'bottom_jeans',
-    shoes: 'shoes_sneakers',
-    accessories: 'acc_none'
-  });
+  // Get current user
+  const user = auth.currentUser;
   
   // Ready Player Me configuration
   const RPM_CONFIG = {
@@ -88,33 +38,305 @@ export default function AvatarScreen({ navigation }) {
   
   const RPM_URL = `https://fasionfitsme.readyplayer.me/avatar`;
   
+  // JavaScript to inject to monitor clipboard events and UI interactions
+  const injectedJavaScript = `
+    (function() {
+      // Track if we've already added our clipboard listeners
+      window.clipboardListenerAdded = window.clipboardListenerAdded || false;
+      window.lastCopiedGlbLink = null;
+      
+      // Function to look for copy buttons and add listeners
+      function addCopyButtonListeners() {
+        // Look for buttons that might be "Copy to clipboard" buttons
+        const buttons = document.querySelectorAll('button');
+        buttons.forEach(button => {
+          if (!button.hasClipboardListener && 
+              (button.innerText.toLowerCase().includes('copy') || 
+               button.title?.toLowerCase().includes('copy') ||
+               button.getAttribute('aria-label')?.toLowerCase().includes('copy') ||
+               button.className.toLowerCase().includes('copy'))) {
+            
+            button.hasClipboardListener = true;
+            button.addEventListener('click', () => {
+              // Send event to React Native
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                event: 'copyButtonClicked',
+                data: { buttonText: button.innerText }
+              }));
+              
+              // Check the page for any GLB links that might be getting copied
+              setTimeout(() => {
+                // Look for elements containing GLB links
+                const glbLinkElems = Array.from(document.querySelectorAll('*')).filter(el => {
+                  const text = el.textContent || el.value || '';
+                  return (text.includes('.glb') || text.includes('models.readyplayer.me')) && 
+                         text.length < 200; // Avoid large blocks of text
+                });
+                
+                glbLinkElems.forEach(el => {
+                  const text = el.textContent || el.value || '';
+                  const glbPattern = /(https?:\\/\\/[\\w\\.-]+\\/[\\w\\.-\\/]+\\.glb|https?:\\/\\/models\\.readyplayer\\.me\\/[\\w\\d]+(?:\\.glb)?)/i;
+                  const match = text.match(glbPattern);
+                  
+                  if (match && match[0]) {
+                    window.lastCopiedGlbLink = match[0];
+                    window.ReactNativeWebView.postMessage(JSON.stringify({
+                      event: 'potentialGlbLinkDetected',
+                      data: { url: match[0] }
+                    }));
+                  }
+                });
+              }, 100);
+            });
+          }
+        });
+      }
+      
+      // Create a MutationObserver to detect DOM changes
+      const observer = new MutationObserver((mutations) => {
+        // Add listeners to any copy buttons
+        addCopyButtonListeners();
+        
+        // Look for buttons with 'next' or 'continue' text
+        const buttons = document.querySelectorAll('button');
+        buttons.forEach(button => {
+          if (!button.hasNavigationListener && 
+              (button.innerText.toLowerCase().includes('next') || 
+               button.innerText.toLowerCase().includes('continue') ||
+               button.innerText.toLowerCase().includes('finish') ||
+               button.innerText.toLowerCase().includes('complete'))) {
+            
+            button.hasNavigationListener = true;
+            button.addEventListener('click', () => {
+              // Send event to React Native
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                event: 'navigationButtonClicked',
+                data: { buttonText: button.innerText }
+              }));
+              
+              // Look for copy buttons after a slight delay
+              setTimeout(addCopyButtonListeners, 1000);
+            });
+          }
+        });
+        
+        // Look for the avatar ID when it appears in the URL
+        if (window.location.href.includes('models.readyplayer.me') || 
+            window.location.href.includes('avatar/') || 
+            window.location.href.includes('download')) {
+          
+          const urlMatch = window.location.href.match(/avatar\\/([\\w\\d]+)|\\/([\\w\\d]+)(?:\\.glb|$)/i);
+          if (urlMatch && (urlMatch[1] || urlMatch[2])) {
+            const avatarId = urlMatch[1] || urlMatch[2];
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              event: 'avatarIdDetected',
+              data: { id: avatarId }
+            }));
+          }
+        }
+      });
+      
+      // Start observing the document for button additions
+      observer.observe(document.body, { 
+        childList: true, 
+        subtree: true,
+        attributes: true,
+        characterData: true,
+        subtree: true
+      });
+      
+      // Override the clipboard API to capture GLB links
+      if (!window.clipboardListenerAdded) {
+        window.clipboardListenerAdded = true;
+        
+        // Store the original clipboard functions
+        const originalWriteText = navigator.clipboard.writeText;
+        
+        // Override writeText to capture the data
+        navigator.clipboard.writeText = function(text) {
+          // Check if it's a GLB link
+          if (text && typeof text === 'string' &&
+              (text.includes('.glb') || text.includes('models.readyplayer.me'))) {
+            
+            window.lastCopiedGlbLink = text;
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              event: 'clipboardWrite',
+              data: { text: text }
+            }));
+          }
+          
+          // Call the original function
+          return originalWriteText.apply(navigator.clipboard, arguments);
+        };
+        
+        // Add global event listener for copy events
+        document.addEventListener('copy', function() {
+          setTimeout(() => {
+            if (window.lastCopiedGlbLink) {
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                event: 'documentCopy',
+                data: { lastKnownGlbLink: window.lastCopiedGlbLink }
+              }));
+            }
+          }, 100);
+        });
+        
+        // Wait for page to be ready, then check for links
+        if (document.readyState === 'complete') {
+          addCopyButtonListeners();
+        } else {
+          window.addEventListener('load', addCopyButtonListeners);
+        }
+      }
+      
+      // Listen for messages from the iframe if there's one
+      window.addEventListener('message', function(event) {
+        if (event.data && typeof event.data === 'object') {
+          // Forward any relevant events to React Native
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            event: 'iframeMessage',
+            data: event.data
+          }));
+          
+          // Check if it's an avatar exported event
+          if (event.data.type === 'v1.avatar.exported') {
+            const avatarUrl = event.data.data?.url;
+            if (avatarUrl) {
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                event: 'avatarExported',
+                data: { url: avatarUrl, id: event.data.data?.id }
+              }));
+            }
+          }
+        }
+      });
+      
+      // Initial call to add listeners to any existing buttons
+      addCopyButtonListeners();
+      
+      true;
+    })();
+  `;
+
+  // Save model URL to Firestore
+  const saveModelUrlToFirestore = async (modelUrl) => {
+    if (!user || !user.uid) {
+      console.error('Cannot save model URL: No user is logged in');
+      return false;
+    }
+
+    try {
+      setSavingToDb(true);
+      
+      // Reference to the user's document
+      const userDocRef = doc(db, 'users', user.uid);
+      
+      // Update the user document with the model URL
+      await updateDoc(userDocRef, {
+        modelURL: modelUrl,
+        lastUpdated: new Date()
+      }).catch(async (error) => {
+        // If the document doesn't exist yet, create it
+        if (error.code === 'not-found') {
+          await setDoc(userDocRef, {
+            modelURL: modelUrl,
+            lastUpdated: new Date(),
+            createdAt: new Date()
+          });
+        } else {
+          throw error;
+        }
+      });
+      
+      console.log('Model URL saved to Firestore successfully');
+      setSaveSuccess(true);
+      return true;
+    } catch (error) {
+      console.error('Error saving model URL to Firestore:', error);
+      return false;
+    } finally {
+      setSavingToDb(false);
+    }
+  };
+
   // Handle messages from the WebView
   const handleWebViewMessage = (event) => {
     try {
       const data = JSON.parse(event.nativeEvent.data);
       if (!data || !data.event) return;
       
-      console.log('Received WebView event:', data.event);
+      console.log('Received WebView event:', data.event, data.data);
       
       switch (data.event) {
-        case 'loaded':
-          setIsLoading(false);
-          console.log('Ready Player Me loaded');
+        case 'clipboardWrite':
+        case 'potentialGlbLinkDetected':
+        case 'documentCopy':
+          // Handle GLB link that was copied to clipboard
+          if (data.data?.text || data.data?.url || data.data?.lastKnownGlbLink) {
+            const glbLink = data.data.text || data.data.url || data.data.lastKnownGlbLink;
+            console.log('GLB link detected from clipboard:', glbLink);
+            
+            // Make sure it's a valid GLB URL
+            if (glbLink.includes('.glb') || glbLink.includes('models.readyplayer.me')) {
+              setModelLink(glbLink);
+              // No longer automatically save the model link
+            }
+          }
+          break;
+          
+        case 'copyButtonClicked':
+          console.log('Copy button clicked:', data.data?.buttonText);
+          // The potentialGlbLinkDetected event should follow this
+          break;
+          
+        case 'navigationButtonClicked':
+          console.log('Navigation button clicked:', data.data?.buttonText);
+          // We'll wait for copy buttons to appear after this
+          break;
+          
+        case 'avatarIdDetected':
+          if (data.data?.id) {
+            console.log('Avatar ID detected in URL:', data.data.id);
+            setAvatarId(data.data.id);
+            
+            // Construct the GLB file URL
+            const glbUrl = `https://models.readyplayer.me/${data.data.id}.glb`;
+            console.log('Generated GLB URL:', glbUrl);
+            setModelLink(glbUrl);
+          }
           break;
           
         case 'avatarExported':
           // Avatar creation completed
-          const avatarUrl = data.data.url;
-          const avatarId = data.data.id;
+          if (data.data?.url) {
+            const avatarUrl = data.data.url;
+            const avatarId = data.data.id;
+            
+            setAvatarUrl(avatarUrl);
+            setAvatarId(avatarId);
+            
+            // Construct the GLB file URL
+            const glbUrl = `https://models.readyplayer.me/${avatarId}.glb`;
+            console.log('GLB URL from avatar export:', glbUrl);
+            setModelLink(glbUrl);
+          }
+          break;
           
-          setAvatarUrl(avatarUrl);
-          setAvatarId(avatarId);
+        case 'iframeMessage':
+          // Handle messages from iframe if needed
+          console.log('Message from iframe:', data.data);
+          if (data.data?.type === 'v1.avatar.exported' && data.data?.data?.url) {
+            const avatarUrl = data.data.data.url;
+            const avatarId = data.data.data.id;
+            setAvatarUrl(avatarUrl);
+            setAvatarId(avatarId);
+          }
           break;
           
         case 'error':
+          setIsWebViewLoading(false);
           setIsLoading(false);
           console.error('Avatar creation error', data);
-          Alert.alert('Error', 'Failed to create avatar. Please try again.');
           break;
           
         default:
@@ -123,260 +345,36 @@ export default function AvatarScreen({ navigation }) {
       }
     } catch (error) {
       console.error('Error parsing message from WebView:', error);
-    }
-  };
-  
-  // Apply a customization option
-  const applyCustomization = (category, optionId) => {
-    setSelectedOptions({
-      ...selectedOptions,
-      [category]: optionId
-    });
-    
-    // Map our custom option IDs to Ready Player Me asset IDs
-    // In a production app, you'd have a more comprehensive mapping
-    const rpmAssetMap = {
-      // Body types
-      body_default: { type: 'BodyType', value: 'default' },
-      body_athletic: { type: 'BodyType', value: 'athletic' },
-      body_slim: { type: 'BodyType', value: 'slim' },
-      
-      // Face
-      face_default: { type: 'FaceShape', value: 'default' },
-      face_round: { type: 'FaceShape', value: 'round' },
-      face_square: { type: 'FaceShape', value: 'square' },
-      
-      // Hair
-      hair_default: { type: 'Hairstyle', value: 'default' },
-      hair_short: { type: 'Hairstyle', value: 'short1' },
-      hair_long: { type: 'Hairstyle', value: 'long1' },
-      hair_none: { type: 'Hairstyle', value: 'none' },
-      
-      // Clothing and accessories - these would need actual asset IDs from RPM
-      top_tshirt: { type: 'Outfit', assetId: 'tshirt1' },
-      top_shirt: { type: 'Outfit', assetId: 'shirt1' },
-      top_sweater: { type: 'Outfit', assetId: 'sweater1' },
-      top_none: { type: 'RemoveOutfit', target: 'top' },
-      
-      bottom_jeans: { type: 'Outfit', assetId: 'jeans1' },
-      bottom_shorts: { type: 'Outfit', assetId: 'shorts1' },
-      bottom_skirt: { type: 'Outfit', assetId: 'skirt1' },
-      bottom_none: { type: 'RemoveOutfit', target: 'bottom' },
-      
-      shoes_sneakers: { type: 'Outfit', assetId: 'sneakers1' },
-      shoes_boots: { type: 'Outfit', assetId: 'boots1' },
-      shoes_formal: { type: 'Outfit', assetId: 'formal_shoes1' },
-      shoes_none: { type: 'RemoveOutfit', target: 'shoes' },
-      
-      acc_glasses: { type: 'Accessory', assetId: 'glasses1' },
-      acc_hat: { type: 'Accessory', assetId: 'hat1' },
-      acc_jewelry: { type: 'Accessory', assetId: 'jewelry1' },
-      acc_none: { type: 'RemoveAccessory', target: 'all' }
-    };
-    
-    const assetInfo = rpmAssetMap[optionId];
-    if (!assetInfo) return;
-    
-    // Prepare message based on type of customization
-    let message;
-    if (assetInfo.type === 'Outfit' || assetInfo.type === 'Accessory') {
-      message = {
-        target: 'readyplayerme',
-        type: 'outfit',
-        data: {
-          outfitId: assetInfo.assetId
-        }
-      };
-    } else if (assetInfo.type === 'RemoveOutfit' || assetInfo.type === 'RemoveAccessory') {
-      message = {
-        target: 'readyplayerme',
-        type: 'removeOutfit',
-        data: {
-          target: assetInfo.target
-        }
-      };
-    } else {
-      // For body, face, hair, etc.
-      message = {
-        target: 'readyplayerme',
-        type: 'setFeature',
-        data: {
-          feature: assetInfo.type,
-          value: assetInfo.value
-        }
-      };
-    }
-    
-    // Send message to WebView
-    const script = `
-      try {
-        const avatar = document.getElementById('avatar');
-        if (avatar && avatar.contentWindow) {
-          avatar.contentWindow.postMessage(${JSON.stringify(message)}, '*');
-          
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            event: 'customizationApplied',
-            data: { category: '${category}', option: '${optionId}' }
-          }));
-        }
-      } catch(e) {
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          event: 'error',
-          data: { message: 'Failed to apply customization', error: e.toString() }
-        }));
-      }
-      true;
-    `;
-    
-    webViewRef.current?.injectJavaScript(script);
-  };
-  
-  // Apply nude or clothing-free setting
-  const applyNudeAvatar = () => {
-    setSelectedOptions({
-      ...selectedOptions,
-      tops: 'top_none',
-      bottoms: 'bottom_none',
-      shoes: 'shoes_none'
-    });
-    
-    // This script would remove all clothing
-    const script = `
-      try {
-        const avatar = document.getElementById('avatar');
-        if (avatar && avatar.contentWindow) {
-          // Remove top
-          avatar.contentWindow.postMessage({
-            target: 'readyplayerme',
-            type: 'removeOutfit',
-            data: { target: 'top' }
-          }, '*');
-          
-          // Remove bottom
-          avatar.contentWindow.postMessage({
-            target: 'readyplayerme',
-            type: 'removeOutfit',
-            data: { target: 'bottom' }
-          }, '*');
-          
-          // Remove shoes
-          avatar.contentWindow.postMessage({
-            target: 'readyplayerme',
-            type: 'removeOutfit',
-            data: { target: 'shoes' }
-          }, '*');
-          
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            event: 'nudeAvatarApplied',
-            data: { status: 'success' }
-          }));
-        }
-      } catch(e) {
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          event: 'error',
-          data: { message: 'Failed to apply nude avatar', error: e.toString() }
-        }));
-      }https://models.readyplayer.me/6818b138b283fcb4110c7373.glb
-      true;
-    `;
-    
-    webViewRef.current?.injectJavaScript(script);
-  };
-  
-  // Save the avatar
-  const saveAvatar = () => {
-    if (!avatarId || !avatarUrl) {
-      Alert.alert('Error', 'Please create an avatar first');
-      return;
-    }
-    
-    setIsLoading(true);
-    
-    // Simulating an API call - replace with your actual API
-    setTimeout(() => {
       setIsLoading(false);
-      Alert.alert(
-        'Success',
-        'Avatar saved successfully!',
-        [
-          {
-            text: 'OK',
-            onPress: () => navigation?.navigate ? navigation.navigate('Home', { avatarUrl }) : null
-          }
-        ]
-      );
-    }, 1000);
+    }
   };
   
-  // Reset the avatar
-  const resetAvatar = () => {
-    const script = `
-      try {
-        const avatar = document.getElementById('avatar');
-        if (avatar && avatar.contentWindow) {
-          avatar.contentWindow.postMessage({
-            target: 'readyplayerme',
-            type: 'reset'
-          }, '*');
-        }
-      } catch(e) {
-        console.error(e);
-      }
-      true;
-    `;
-    
-    webViewRef.current?.injectJavaScript(script);
-    
-    // Reset all selections to defaults
-    setSelectedOptions({
-      body: 'body_default',
-      face: 'face_default',
-      hair: 'hair_default',
-      tops: 'top_tshirt',
-      bottoms: 'bottom_jeans',
-      shoes: 'shoes_sneakers',
-      accessories: 'acc_none'
-    });
-    
-    setAvatarUrl(null);
-    setAvatarId(null);
+  // For manual save button
+  const saveModelLink = () => {
+    if (modelLink) {
+      saveModelUrlToFirestore(modelLink);
+    } else if (avatarId) {
+      const glbUrl = `https://models.readyplayer.me/${avatarId}.glb`;
+      setModelLink(glbUrl);
+      saveModelUrlToFirestore(glbUrl);
+    } else {
+      console.error('No avatar model link available');
+    }
   };
   
-  // Render customization options
-  const renderCustomizationOptions = () => {
-    return (
-      <View style={styles.optionsContainer}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          {customizationOptions[activeTab].map((option) => (
-            <TouchableOpacity
-              key={option.id}
-              style={[
-                styles.optionItem,
-                selectedOptions[activeTab] === option.id && styles.selectedOption
-              ]}
-              onPress={() => applyCustomization(activeTab, option.id)}
-            >
-              <Image 
-                source={{ uri: option.imageUrl }} 
-                style={styles.optionImage} 
-              />
-              <Text style={[
-                styles.optionText,
-                selectedOptions[activeTab] === option.id && styles.selectedOptionText
-              ]}>
-                {option.name}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
-    );
+  // Navigate to home screen after successful save
+  const navigateToHome = () => {
+    if (navigation?.navigate) {
+      navigation.navigate('Home', { 
+        modelLink: modelLink
+      });
+    }
   };
   
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerText}>Customize Your Avatar</Text>
+        <Text style={styles.headerText}>Avatar Creator</Text>
       </View>
       
       <View style={styles.webviewContainer}>
@@ -387,7 +385,10 @@ export default function AvatarScreen({ navigation }) {
           onMessage={handleWebViewMessage}
           javaScriptEnabled={true}
           domStorageEnabled={true}
+          injectedJavaScript={injectedJavaScript}
           startInLoadingState={true}
+          onLoadStart={() => setIsWebViewLoading(true)}
+          onLoadEnd={() => setIsWebViewLoading(false)}
           renderLoading={() => (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color="#0000ff" />
@@ -395,84 +396,56 @@ export default function AvatarScreen({ navigation }) {
             </View>
           )}
         />
+        
+        {savingToDb && (
+          <View style={styles.overlay}>
+            <ActivityIndicator size="large" color="#FFFFFF" />
+            <Text style={styles.overlayText}>Saving model link to database...</Text>
+          </View>
+        )}
       </View>
       
-      
       <View style={styles.controlsContainer}>
-        {/* Tabs for different customization categories */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabContainer}>
-          <TouchableOpacity 
-            style={[styles.tab, activeTab === 'body' && styles.activeTab]} 
-            onPress={() => setActiveTab('body')}
-          >
-            <Text style={[styles.tabText, activeTab === 'body' && styles.activeTabText]}>Body</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.tab, activeTab === 'face' && styles.activeTab]} 
-            onPress={() => setActiveTab('face')}
-          >
-            <Text style={[styles.tabText, activeTab === 'face' && styles.activeTabText]}>Face</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.tab, activeTab === 'hair' && styles.activeTab]} 
-            onPress={() => setActiveTab('hair')}
-          >
-            <Text style={[styles.tabText, activeTab === 'hair' && styles.activeTabText]}>Hair</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.tab, activeTab === 'tops' && styles.activeTab]} 
-            onPress={() => setActiveTab('tops')}
-          >
-            <Text style={[styles.tabText, activeTab === 'tops' && styles.activeTabText]}>Tops</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.tab, activeTab === 'bottoms' && styles.activeTab]} 
-            onPress={() => setActiveTab('bottoms')}
-          >
-            <Text style={[styles.tabText, activeTab === 'bottoms' && styles.activeTabText]}>Bottoms</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.tab, activeTab === 'shoes' && styles.activeTab]} 
-            onPress={() => setActiveTab('shoes')}
-          >
-            <Text style={[styles.tabText, activeTab === 'shoes' && styles.activeTabText]}>Shoes</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.tab, activeTab === 'accessories' && styles.activeTab]} 
-            onPress={() => setActiveTab('accessories')}
-          >
-            <Text style={[styles.tabText, activeTab === 'accessories' && styles.activeTabText]}>Accessories</Text>
-          </TouchableOpacity>
-        </ScrollView>
-        
-        {/* Options for the selected category */}
-        {renderCustomizationOptions()}
-        
-        {/* Quick options */}
-        <View style={styles.quickOptionsContainer}>
-          <TouchableOpacity 
-            style={styles.quickOption}
-            onPress={applyNudeAvatar}
-          >
-            <Text style={styles.quickOptionText}>No Clothing</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={styles.quickOption}
-            onPress={resetAvatar}
-          >
-            <Text style={styles.quickOptionText}>Reset All</Text>
-          </TouchableOpacity>
+        {/* Instructions for user */}
+        <View style={styles.instructionContainer}>
+          <Text style={styles.instructionTitle}>How to save your avatar:</Text>
+          <Text style={styles.instructionText}>
+            1. Create your avatar{'\n'}
+            2. Click "Copy" when you see it{'\n'}
+            3. Click "Save Avatar" button below to save your avatar
+          </Text>
+        </View>
+      
+        {/* Action buttons */}
+        <View style={styles.buttonContainer}>
+          {saveSuccess ? (
+            <TouchableOpacity 
+              style={[styles.button, styles.continueButton]}
+              onPress={navigateToHome}
+            >
+              <Text style={styles.buttonText}>Continue to Home</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity 
+              style={[styles.button, styles.saveButton]}
+              onPress={saveModelLink}
+              disabled={savingToDb}
+            >
+              <Text style={styles.buttonText}>
+                {savingToDb ? 'Saving...' : 'Save Avatar'}
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
         
-        {/* Save button */}
-        <TouchableOpacity 
-          style={styles.saveButton}
-          onPress={saveAvatar}
-          disabled={!avatarId}
-        >
-          <Text style={styles.saveButtonText}>Save Avatar</Text>
-        </TouchableOpacity>
+        {/* Show success message */}
+        {saveSuccess && (
+          <View style={styles.successContainer}>
+            <Text style={styles.successText}>
+              Your avatar model link has been saved successfully!
+            </Text>
+          </View>
+        )}
       </View>
     </SafeAreaView>
   );
@@ -540,80 +513,57 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#ddd',
   },
-  tabContainer: {
-    flexDirection: 'row',
+  instructionContainer: {
     marginBottom: 15,
-  },
-  tab: {
-    paddingVertical: 8,
-    paddingHorizontal: 15,
-    marginRight: 10,
-    borderRadius: 20,
-    backgroundColor: '#e0e0e0',
-  },
-  activeTab: {
-    backgroundColor: '#4361EE',
-  },
-  tabText: {
-    color: '#333',
-    fontWeight: '500',
-  },
-  activeTabText: {
-    color: 'white',
-  },
-  optionsContainer: {
-    marginBottom: 15,
-  },
-  optionItem: {
-    alignItems: 'center',
-    marginRight: 12,
-    padding: 8,
+    padding: 12,
+    backgroundColor: '#fff8e8',
     borderRadius: 8,
-    backgroundColor: '#f0f0f0',
-    width: 80,
+    borderWidth: 1,
+    borderColor: '#ffe4b8',
   },
-  selectedOption: {
-    backgroundColor: '#4361EE',
+  instructionTitle: {
+    fontWeight: 'bold',
+    color: '#b45309',
+    marginBottom: 8,
+    fontSize: 16,
   },
-  optionImage: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#ddd',
-    marginBottom: 5,
+  instructionText: {
+    color: '#4b5563',
+    lineHeight: 20,
   },
-  optionText: {
-    fontSize: 12,
-    textAlign: 'center',
-    color: '#333',
-  },
-  selectedOptionText: {
-    color: 'white',
-  },
-  quickOptionsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 15,
-  },
-  quickOption: {
-    flex: 1,
-    backgroundColor: '#ff6b6b',
+  successContainer: {
+    marginTop: 15,
     padding: 10,
+    backgroundColor: '#d1fae5',
+    borderRadius: 8,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#6ee7b7',
+  },
+  successText: {
+    color: '#065f46',
+    textAlign: 'center',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  buttonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+  },
+  button: {
+    flex: 1,
+    padding: 15,
     borderRadius: 8,
     alignItems: 'center',
     margin: 5,
   },
-  quickOptionText: {
-    color: 'white',
-    fontWeight: 'bold',
-  },
   saveButton: {
-    backgroundColor: '#4CC9F0',
-    padding: 15,
-    borderRadius: 8,
-    alignItems: 'center',
+    backgroundColor: '#34D399',
   },
-  saveButtonText: {
+  continueButton: {
+    backgroundColor: '#3B82F6',
+  },
+  buttonText: {
     color: 'white',
     fontWeight: 'bold',
     fontSize: 16,
