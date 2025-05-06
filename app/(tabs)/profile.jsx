@@ -126,6 +126,13 @@ export default function Profile() {
     return true;
   };
 
+  // Move the navigate function inside the component
+  const navigateToAvatarCreation = () => {
+    router.push({
+      pathname: "/Avater/AvatarScreen", // Fixed the route path (Avater -> Avatar)
+    });
+  };
+
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -282,6 +289,11 @@ export default function Profile() {
           )}
           <Text style={styles.emailText}>{email}</Text>
         </View>
+      </View>
+      <View>
+      <TouchableOpacity style={styles.avatarButton} onPress={navigateToAvatarCreation}>
+          <Text style={styles.avatarButtonText}>Create Avatar</Text>
+        </TouchableOpacity>
       </View>
 
       <Text style={styles.sectionTitle}>My Orders</Text>
