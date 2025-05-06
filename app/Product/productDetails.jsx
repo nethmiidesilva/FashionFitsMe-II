@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ScrollView,
   FlatList,
+  Alert,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import Icon from "react-native-vector-icons/Ionicons";
@@ -19,7 +20,7 @@ import { collection, getDocs } from "firebase/firestore";
 // Import for Algolia
 import algoliasearch from 'algoliasearch/lite';
 
-export default function ProductDetails({ route }) {
+export default function ProductDetails() {
   const navigation = useNavigation();
   const item = useLocalSearchParams();
   const { itemId } = useLocalSearchParams();
@@ -280,6 +281,30 @@ export default function ProductDetails({ route }) {
     navigation.push("Product/productDetails", { itemId: productId });
   };
 
+  // Navigate to the Try On Avatar screen
+  const navigateToTryOn = () => {
+    if (!product) return;
+    
+    const auth = getAuth();
+    if (!auth.currentUser) {
+      Alert.alert(
+        "Sign In Required", 
+        "You need to sign in to use the virtual try-on feature.",
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Sign In", onPress: () => navigation.navigate("auth/login") }
+        ]
+      );
+      return;
+    }
+    
+    navigation.navigate("Avater/TryOnAvatar", { 
+      productImage: product.Image,
+      productId: product.id,
+      productName: product.name
+    });
+  }
+
   return (
     <ScrollView style={styles.container}>
       {loading ? (
@@ -290,6 +315,24 @@ export default function ProductDetails({ route }) {
           <View style={styles.detailsContainer}>
             <Text style={styles.productName}>{product.name}</Text>
             <Text style={styles.productPrice}>${product.price}</Text>
+
+            {/* Virtual Try-On Button */}
+            <TouchableOpacity 
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: '#ff6b6b',
+                paddingVertical: 10,
+                paddingHorizontal: 20,
+                borderRadius: 8,
+                marginVertical: 15,
+              }}
+              onPress={navigateToTryOn}
+            >
+              <Icon name="body-outline" size={20} color="#fff" />
+              <Text style={{color: '#fff', fontWeight: 'bold', marginLeft: 8}}>Virtual Try-On</Text>
+            </TouchableOpacity>
 
             <View style={styles.detailsBox}>
               <Text style={styles.productDetails}>
@@ -314,7 +357,7 @@ export default function ProductDetails({ route }) {
               </Text>
 
               <Text style={styles.productDetails}>
-                Care Instruction{" "}
+                Care Instruction:{" "}
                 <Text style={styles.highlight}>{product.careInstructions}</Text>
               </Text>
             </View>
@@ -400,7 +443,7 @@ export default function ProductDetails({ route }) {
               <Icon
                 name="cart"
                 size={24}
-                color={isInCart ? "#008000" : "#fff"}
+                color={isInCart ? "#4CD964" : "#fff"}
               />
               <Text style={styles.actionText}>Add to Cart</Text>
             </TouchableOpacity>
