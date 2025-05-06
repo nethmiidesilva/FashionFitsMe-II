@@ -19,6 +19,7 @@ export default function AvatarScreen({ navigation }) {
   const [modelLink, setModelLink] = useState(null);
   const [savingToDb, setSavingToDb] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [hasValidLink, setHasValidLink] = useState(false);
   const webViewRef = useRef(null);
   
   // Get current user
@@ -44,6 +45,19 @@ export default function AvatarScreen({ navigation }) {
       // Track if we've already added our clipboard listeners
       window.clipboardListenerAdded = window.clipboardListenerAdded || false;
       window.lastCopiedGlbLink = null;
+      
+      // Function to validate GLB link
+      function isValidGlbLink(link) {
+        if (!link) return false;
+        
+        // Ignore https://models.readyplayer.me/choose.glb
+        if (link.includes('choose.glb')) {
+          return false;
+        }
+        
+        // Must be a .glb link or models.readyplayer.me link
+        return (link.includes('.glb') || link.includes('models.readyplayer.me'));
+      }
       
       // Function to look for copy buttons and add listeners
       function addCopyButtonListeners() {
@@ -78,7 +92,7 @@ export default function AvatarScreen({ navigation }) {
                   const glbPattern = /(https?:\\/\\/[\\w\\.-]+\\/[\\w\\.-\\/]+\\.glb|https?:\\/\\/models\\.readyplayer\\.me\\/[\\w\\d]+(?:\\.glb)?)/i;
                   const match = text.match(glbPattern);
                   
-                  if (match && match[0]) {
+                  if (match && match[0] && isValidGlbLink(match[0])) {
                     window.lastCopiedGlbLink = match[0];
                     window.ReactNativeWebView.postMessage(JSON.stringify({
                       event: 'potentialGlbLinkDetected',
@@ -128,10 +142,14 @@ export default function AvatarScreen({ navigation }) {
           const urlMatch = window.location.href.match(/avatar\\/([\\w\\d]+)|\\/([\\w\\d]+)(?:\\.glb|$)/i);
           if (urlMatch && (urlMatch[1] || urlMatch[2])) {
             const avatarId = urlMatch[1] || urlMatch[2];
-            window.ReactNativeWebView.postMessage(JSON.stringify({
-              event: 'avatarIdDetected',
-              data: { id: avatarId }
-            }));
+            
+            // Ignore if this is 'choose.glb'
+            if (avatarId !== 'choose') {
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                event: 'avatarIdDetected',
+                data: { id: avatarId }
+              }));
+            }
           }
         }
       });
@@ -154,10 +172,8 @@ export default function AvatarScreen({ navigation }) {
         
         // Override writeText to capture the data
         navigator.clipboard.writeText = function(text) {
-          // Check if it's a GLB link
-          if (text && typeof text === 'string' &&
-              (text.includes('.glb') || text.includes('models.readyplayer.me'))) {
-            
+          // Check if it's a valid GLB link
+          if (text && typeof text === 'string' && isValidGlbLink(text)) {
             window.lastCopiedGlbLink = text;
             window.ReactNativeWebView.postMessage(JSON.stringify({
               event: 'clipboardWrite',
@@ -172,7 +188,7 @@ export default function AvatarScreen({ navigation }) {
         // Add global event listener for copy events
         document.addEventListener('copy', function() {
           setTimeout(() => {
-            if (window.lastCopiedGlbLink) {
+            if (window.lastCopiedGlbLink && isValidGlbLink(window.lastCopiedGlbLink)) {
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 event: 'documentCopy',
                 data: { lastKnownGlbLink: window.lastCopiedGlbLink }
@@ -201,10 +217,12 @@ export default function AvatarScreen({ navigation }) {
           // Check if it's an avatar exported event
           if (event.data.type === 'v1.avatar.exported') {
             const avatarUrl = event.data.data?.url;
-            if (avatarUrl) {
+            const avatarId = event.data.data?.id;
+            
+            if (avatarUrl && avatarId && avatarId !== 'choose') {
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 event: 'avatarExported',
-                data: { url: avatarUrl, id: event.data.data?.id }
+                data: { url: avatarUrl, id: avatarId }
               }));
             }
           }
@@ -217,6 +235,12 @@ export default function AvatarScreen({ navigation }) {
       true;
     })();
   `;
+
+  // Function to check if a link is valid (not choose.glb)
+  const isValidLink = (link) => {
+    if (!link) return false;
+    return link.includes('.glb') && !link.includes('choose.glb');
+  };
 
   // Save model URL to Firestore
   const saveModelUrlToFirestore = async (modelUrl) => {
@@ -276,10 +300,12 @@ export default function AvatarScreen({ navigation }) {
             const glbLink = data.data.text || data.data.url || data.data.lastKnownGlbLink;
             console.log('GLB link detected from clipboard:', glbLink);
             
-            // Make sure it's a valid GLB URL
-            if (glbLink.includes('.glb') || glbLink.includes('models.readyplayer.me')) {
+            // Make sure it's a valid GLB URL and not choose.glb
+            if (isValidLink(glbLink)) {
               setModelLink(glbLink);
-              // No longer automatically save the model link
+              setHasValidLink(true);
+            } else {
+              console.log('Ignoring invalid link:', glbLink);
             }
           }
           break;
@@ -297,39 +323,65 @@ export default function AvatarScreen({ navigation }) {
         case 'avatarIdDetected':
           if (data.data?.id) {
             console.log('Avatar ID detected in URL:', data.data.id);
-            setAvatarId(data.data.id);
             
-            // Construct the GLB file URL
-            const glbUrl = `https://models.readyplayer.me/${data.data.id}.glb`;
-            console.log('Generated GLB URL:', glbUrl);
-            setModelLink(glbUrl);
+            // Ignore if this is 'choose'
+            if (data.data.id !== 'choose') {
+              setAvatarId(data.data.id);
+              
+              // Construct the GLB file URL
+              const glbUrl = `https://models.readyplayer.me/${data.data.id}.glb`;
+              console.log('Generated GLB URL:', glbUrl);
+              
+              if (isValidLink(glbUrl)) {
+                setModelLink(glbUrl);
+                setHasValidLink(true);
+              }
+            }
           }
           break;
           
         case 'avatarExported':
           // Avatar creation completed
-          if (data.data?.url) {
+          if (data.data?.url && data.data?.id) {
             const avatarUrl = data.data.url;
             const avatarId = data.data.id;
             
-            setAvatarUrl(avatarUrl);
-            setAvatarId(avatarId);
-            
-            // Construct the GLB file URL
-            const glbUrl = `https://models.readyplayer.me/${avatarId}.glb`;
-            console.log('GLB URL from avatar export:', glbUrl);
-            setModelLink(glbUrl);
+            // Ignore if this is 'choose'
+            if (avatarId !== 'choose') {
+              setAvatarUrl(avatarUrl);
+              setAvatarId(avatarId);
+              
+              // Construct the GLB file URL
+              const glbUrl = `https://models.readyplayer.me/${avatarId}.glb`;
+              console.log('GLB URL from avatar export:', glbUrl);
+              
+              if (isValidLink(glbUrl)) {
+                setModelLink(glbUrl);
+                setHasValidLink(true);
+              }
+            }
           }
           break;
           
         case 'iframeMessage':
           // Handle messages from iframe if needed
           console.log('Message from iframe:', data.data);
-          if (data.data?.type === 'v1.avatar.exported' && data.data?.data?.url) {
+          if (data.data?.type === 'v1.avatar.exported' && data.data?.data?.url && data.data?.data?.id) {
             const avatarUrl = data.data.data.url;
             const avatarId = data.data.data.id;
-            setAvatarUrl(avatarUrl);
-            setAvatarId(avatarId);
+            
+            // Ignore if this is 'choose'
+            if (avatarId !== 'choose') {
+              setAvatarUrl(avatarUrl);
+              setAvatarId(avatarId);
+              
+              // Construct the GLB file URL
+              const glbUrl = `https://models.readyplayer.me/${avatarId}.glb`;
+              if (isValidLink(glbUrl)) {
+                setModelLink(glbUrl);
+                setHasValidLink(true);
+              }
+            }
           }
           break;
           
@@ -351,14 +403,18 @@ export default function AvatarScreen({ navigation }) {
   
   // For manual save button
   const saveModelLink = () => {
-    if (modelLink) {
+    if (modelLink && isValidLink(modelLink)) {
       saveModelUrlToFirestore(modelLink);
-    } else if (avatarId) {
+    } else if (avatarId && avatarId !== 'choose') {
       const glbUrl = `https://models.readyplayer.me/${avatarId}.glb`;
-      setModelLink(glbUrl);
-      saveModelUrlToFirestore(glbUrl);
+      if (isValidLink(glbUrl)) {
+        setModelLink(glbUrl);
+        saveModelUrlToFirestore(glbUrl);
+      } else {
+        console.error('Invalid avatar model link');
+      }
     } else {
-      console.error('No avatar model link available');
+      console.error('No valid avatar model link available');
     }
   };
   
@@ -416,6 +472,7 @@ export default function AvatarScreen({ navigation }) {
           </Text>
         </View>
       
+        
         {/* Action buttons */}
         <View style={styles.buttonContainer}>
           {saveSuccess ? (
@@ -427,11 +484,17 @@ export default function AvatarScreen({ navigation }) {
             </TouchableOpacity>
           ) : (
             <TouchableOpacity 
-              style={[styles.button, styles.saveButton]}
+              style={[
+                styles.button, 
+                hasValidLink ? styles.saveButton : styles.disabledButton
+              ]}
               onPress={saveModelLink}
-              disabled={savingToDb}
+              disabled={!hasValidLink || savingToDb}
             >
-              <Text style={styles.buttonText}>
+              <Text style={[
+                styles.buttonText,
+                !hasValidLink && styles.disabledButtonText
+              ]}>
                 {savingToDb ? 'Saving...' : 'Save Avatar'}
               </Text>
             </TouchableOpacity>
@@ -531,6 +594,19 @@ const styles = StyleSheet.create({
     color: '#4b5563',
     lineHeight: 20,
   },
+  statusContainer: {
+    marginBottom: 15,
+    padding: 10,
+    backgroundColor: '#e0f2fe',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#bae6fd',
+  },
+  statusText: {
+    color: '#0369a1',
+    textAlign: 'center',
+    fontSize: 14,
+  },
   successContainer: {
     marginTop: 15,
     padding: 10,
@@ -559,6 +635,12 @@ const styles = StyleSheet.create({
   },
   saveButton: {
     backgroundColor: '#34D399',
+  },
+  disabledButton: {
+    backgroundColor: '#d1d5db',
+  },
+  disabledButtonText: {
+    color: '#9ca3af',
   },
   continueButton: {
     backgroundColor: '#3B82F6',
