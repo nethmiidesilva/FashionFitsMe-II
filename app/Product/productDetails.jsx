@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   ScrollView,
   FlatList,
-  Alert,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import Icon from "react-native-vector-icons/Ionicons";
@@ -20,7 +19,7 @@ import { collection, getDocs } from "firebase/firestore";
 // Import for Algolia
 import algoliasearch from 'algoliasearch/lite';
 
-export default function ProductDetails() {
+export default function ProductDetails({ route }) {
   const navigation = useNavigation();
   const item = useLocalSearchParams();
   const { itemId } = useLocalSearchParams();
@@ -183,6 +182,20 @@ export default function ProductDetails() {
     fetchWishlistState();
   }, [item.itemId]);
 
+  const tryOn = async (product) => {
+    const userId = getAuth().currentUser.uid;
+    try {
+      const docRef = doc(db, "latest_change", "z05FheO9QOpCPJQItShC");
+      await setDoc(docRef, {
+        clothe_link: product["3dmodelLink"] || "",  // ensure product has this field
+        model_link: product.model_link || "",    // ensure product has this field
+        userId: userId
+      });
+      console.log("Data updated successfully!");
+    } catch (error) {
+      console.error("Error updating document: ", error);
+    }
+  };
   const addToWishlist = async (clotheId) => {
     try {
       const userId = getAuth().currentUser.uid; // Get the current user ID
@@ -281,30 +294,6 @@ export default function ProductDetails() {
     navigation.push("Product/productDetails", { itemId: productId });
   };
 
-  // Navigate to the Try On Avatar screen
-  const navigateToTryOn = () => {
-    if (!product) return;
-    
-    const auth = getAuth();
-    if (!auth.currentUser) {
-      Alert.alert(
-        "Sign In Required", 
-        "You need to sign in to use the virtual try-on feature.",
-        [
-          { text: "Cancel", style: "cancel" },
-          { text: "Sign In", onPress: () => navigation.navigate("auth/login") }
-        ]
-      );
-      return;
-    }
-    
-    navigation.navigate("Avater/TryOnAvatar", { 
-      productImage: product.Image,
-      productId: product.id,
-      productName: product.name
-    });
-  }
-
   return (
     <ScrollView style={styles.container}>
       {loading ? (
@@ -313,27 +302,15 @@ export default function ProductDetails() {
         <>
           <Image source={{ uri: product.Image }} style={styles.productImage} />
           <View style={styles.detailsContainer}>
-            <Text style={styles.productName}>{product.name}</Text>
-            <Text style={styles.productPrice}>${product.price}</Text>
+            <Text style={styles.productName}>{product.name}</Text> 
+            <View style={styles.productInfoContainer}>
+            <TouchableOpacity style={styles.avatarButton} onPress={() => tryOn(product)}>
+  <Text style={styles.avatarButtonText}>Try Avatar</Text>
+</TouchableOpacity>
 
-            {/* Virtual Try-On Button */}
-            <TouchableOpacity 
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: '#ff6b6b',
-                paddingVertical: 10,
-                paddingHorizontal: 20,
-                borderRadius: 8,
-                marginVertical: 15,
-              }}
-              onPress={navigateToTryOn}
-            >
-              <Icon name="body-outline" size={20} color="#fff" />
-              <Text style={{color: '#fff', fontWeight: 'bold', marginLeft: 8}}>Virtual Try-On</Text>
-            </TouchableOpacity>
-
+ 
+</View>
+              <Text style={styles.productPrice}>${product.price}</Text>
             <View style={styles.detailsBox}>
               <Text style={styles.productDetails}>
                 Brand: <Text style={styles.highlight}>{product.brand}</Text>
@@ -357,7 +334,7 @@ export default function ProductDetails() {
               </Text>
 
               <Text style={styles.productDetails}>
-                Care Instruction:{" "}
+                Care Instruction{" "}
                 <Text style={styles.highlight}>{product.careInstructions}</Text>
               </Text>
             </View>
@@ -443,7 +420,7 @@ export default function ProductDetails() {
               <Icon
                 name="cart"
                 size={24}
-                color={isInCart ? "#4CD964" : "#fff"}
+                color={isInCart ? "#008000" : "#fff"}
               />
               <Text style={styles.actionText}>Add to Cart</Text>
             </TouchableOpacity>
@@ -608,5 +585,27 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 14,
     marginTop: 4,
+  },productInfoContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    marginTop: 10,
   },
+  
+  avatarButton: {
+    backgroundColor: '#4A90E2',
+    paddingVertical: 8,
+    paddingHorizontal: 15,
+    borderRadius: 20,
+  },
+  
+  avatarButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  
+
+  
 });
