@@ -13,9 +13,11 @@ import { useNavigation } from "@react-navigation/native";
 import Icon from "react-native-vector-icons/Ionicons";
 import { useLocalSearchParams } from "expo-router";
 import { db } from "../../configs/firebase";
-import { doc, getDoc, setDoc, updateDoc, arrayUnion } from "firebase/firestore";
+import { doc, getDoc, setDoc, updateDoc, arrayUnion, increment } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 import { collection, getDocs } from "firebase/firestore";
+import { TextInput, Button } from 'react-native';
+import { addDoc, serverTimestamp } from 'firebase/firestore';
 
 // Import for Algolia
 import algoliasearch from 'algoliasearch/lite';
@@ -32,11 +34,23 @@ export default function ProductDetails() {
   const [isInCart, setIsInCart] = useState(false);
   const [similarProducts, setSimilarProducts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [newComment, setNewComment] = useState('');
+  const [userRating, setUserRating] = useState(5); // Default rating value
+  const [product, setProduct] = useState(null);
 
   // Initialize Algolia client
   const searchClient = algoliasearch('VIX0G4CQXG', 'e28a685420a7303098b8683c143e094d');
   const index = searchClient.initIndex('clothes');
+  const [visibleCount, setVisibleCount] = useState(3);
 
+  const handleSeeMore = () => {
+    setVisibleCount((prev) => prev + 3);
+  };
+  
+  const handleSeeFewer = () => {
+    setVisibleCount((prev) => Math.max(prev - 3, 3));
+  };
+  
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -48,6 +62,11 @@ export default function ProductDetails() {
           ...doc.data(),
         }));
         setClothes(clothesData);
+        
+        // Find the current product
+        const currentProduct = clothesData.find((cloth) => cloth.id === itemId);
+        setProduct(currentProduct);
+        
         setLoading(false);
       } catch (error) {
         console.error("Error fetching data:", error);
@@ -56,11 +75,36 @@ export default function ProductDetails() {
     };
 
     fetchData();
-  }, []);
+  }, [itemId]);
 
-  // Find the current product
-  const product = clothes.find((cloth) => cloth.id === itemId);
+  const [reviews, setReviews] = useState([]);
 
+  useEffect(() => {
+    const fetchReviews = async () => {
+      try {
+        setLoading(true);
+        const commentsCollection = collection(db, "userComments");
+        const commentsSnapshot = await getDocs(commentsCollection);
+        const commentsData = commentsSnapshot.docs
+          .map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+            createdAt: doc.data().dateandtime?.toDate?.() || null,
+          }))
+          .filter((comment) => comment.itemId === itemId); // manual filter
+        setReviews(commentsData);
+        setLoading(false);
+      } catch (error) {
+        console.error("Error fetching reviews:", error);
+        setLoading(false);
+      }
+    };
+  
+    if (itemId) {
+      fetchReviews();
+    }
+  }, [itemId]);
+  
   // Fetch similar products from Algolia
   useEffect(() => {
     const fetchSimilarProducts = async () => {
@@ -217,7 +261,7 @@ export default function ProductDetails() {
       console.error("Error updating wishlist:", error);
     }
   };
-
+  
   useEffect(() => {
     // Check if the item is in the cart on component mount
     const fetchCartState = async () => {
@@ -237,50 +281,12 @@ export default function ProductDetails() {
 
     fetchCartState();
   }, [item.itemId]); // Effect runs when itemId changes
-
-  const addToCart = async (clotheId) => {
-    try {
-      const userId = getAuth().currentUser.uid; // Get the current user ID
-      const userDocRef = doc(db, "cart", userId); // Reference to the user's cart document
-
-      const userDocSnap = await getDoc(userDocRef);
-
-      let updatedItems = [];
-      if (userDocSnap.exists()) {
-        const items = userDocSnap.data().items || [];
-
-        if (items.includes(clotheId)) {
-          // Remove the item from the cart if it's already there
-          updatedItems = items.filter((id) => id !== clotheId);
-          setIsInCart(false); // Update the state to show the item is not in the cart
-        } else {
-          // Add the item to the cart
-          updatedItems = [...items, clotheId];
-          setIsInCart(true); // Update the state to show the item is in the cart
-        }
-      } else {
-        // If no cart exists, create one with the item
-        updatedItems = [clotheId];
-        setIsInCart(true); // Set the state to show the item is in the cart
-      }
-
-      // Update the cart document in Firestore
-      await setDoc(userDocRef, { items: updatedItems }, { merge: true });
-
-      console.log("Cart updated successfully!");
-    } catch (error) {
-      console.error("Error updating cart:", error);
-    }
-  };
   
-  // Navigate to the product detail page for the selected recommendation
-  const navigateToProduct = (productId) => {
-    console.log("Navigating to product:", productId);
-    
-    // Reset the screen with new params
-    navigation.push("Product/productDetails", { itemId: productId });
-  };
-
+  // Generate unique display name like "user123"
+  function generateDisplayName() {
+    return 'user' + Math.floor(100000 + Math.random() * 900000); // 6-digit random ID
+  }
+  
   // Navigate to the Try On Avatar screen
   const navigateToTryOn = () => {
     if (!product) return;
@@ -305,6 +311,183 @@ export default function ProductDetails() {
     });
   }
 
+  const handleAddComment = async () => {
+    const displayName = await generateDisplayName();
+    const userId = getAuth().currentUser.uid;
+    if (!userId || newComment.trim() === '') return;
+  
+    try {
+      await addDoc(collection(db, 'userComments'), {
+        comment: newComment.trim(),
+        dateandtime: serverTimestamp(),
+        itemId: itemId, // current item's ID
+        userId: userId,
+        rating: userRating, // Add the user's rating
+        username: displayName || 'Anonymous',
+      });
+  
+      // Update the product's average rating in Firestore
+      updateProductRating(itemId, userRating);
+      
+      setNewComment('');
+      setUserRating(5); // Reset rating
+      
+      // Refresh comments
+      setLoading(true);
+      const commentsCollection = collection(db, "userComments");
+      const commentsSnapshot = await getDocs(commentsCollection);
+      const commentsData = commentsSnapshot.docs
+        .map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+          createdAt: doc.data().dateandtime?.toDate?.() || null,
+        }))
+        .filter((comment) => comment.itemId === itemId); // manual filter
+      setReviews(commentsData);
+      setLoading(false);
+    } catch (error) {
+      console.error('Error adding comment:', error);
+    }
+  };
+  
+  // Function to update product's average rating
+  const updateProductRating = async (productId, newRating) => {
+    try {
+      const productRef = doc(db, "clothes", productId);
+      const productDoc = await getDoc(productRef);
+      
+      if (productDoc.exists()) {
+        const currentData = productDoc.data();
+        const currentRatingSum = currentData.ratingSum || currentData.rating || 0;
+        const currentRatingCount = currentData.ratingCount || 1;
+        
+        // Calculate new values
+        const newRatingSum = currentRatingSum + newRating;
+        const newRatingCount = currentRatingCount + 1;
+        const newAverageRating = (newRatingSum / newRatingCount).toFixed(1);
+        
+        // Update the product document
+        await updateDoc(productRef, {
+          rating: parseFloat(newAverageRating),
+          ratingSum: newRatingSum,
+          ratingCount: newRatingCount
+        });
+        
+        // Update local product state
+        setProduct(prev => {
+          if (prev) {
+            return {
+              ...prev,
+              rating: parseFloat(newAverageRating)
+            };
+          }
+          return prev;
+        });
+        
+        console.log(`Updated product rating to ${newAverageRating}`);
+      }
+    } catch (error) {
+      console.error("Error updating product rating:", error);
+    }
+  };
+  
+  const addToCart = async (clotheId) => {
+    try {
+      if (!product || product.stock <= 0) {
+        Alert.alert("Out of Stock", "This item is currently out of stock.");
+        return;
+      }
+      
+      const userId = getAuth().currentUser.uid; // Get the current user ID
+      const userDocRef = doc(db, "cart", userId); // Reference to the user's cart document
+      const productRef = doc(db, "clothes", clotheId); // Reference to the product document
+
+      const userDocSnap = await getDoc(userDocRef);
+
+      let updatedItems = [];
+      if (userDocSnap.exists()) {
+        const items = userDocSnap.data().items || [];
+
+        if (items.includes(clotheId)) {
+          // Remove the item from cart - restore stock
+          updatedItems = items.filter((id) => id !== clotheId);
+          setIsInCart(false);
+          
+          // Increment stock back
+          await updateDoc(productRef, {
+            stock: increment(1)
+          });
+        } else {
+          // Add the item to cart - decrease stock
+          updatedItems = [...items, clotheId];
+          setIsInCart(true);
+          
+          // Decrement stock
+          await updateDoc(productRef, {
+            stock: increment(-1)
+          });
+        }
+      } else {
+        // If no cart exists, create one with the item
+        updatedItems = [clotheId];
+        setIsInCart(true);
+        
+        // Decrement stock
+        await updateDoc(productRef, {
+          stock: increment(-1)
+        });
+      }
+
+      // Update the cart document in Firestore
+      await setDoc(userDocRef, { items: updatedItems }, { merge: true });
+
+      // Refresh the product data to get updated stock
+      const updatedProductDoc = await getDoc(productRef);
+      if (updatedProductDoc.exists()) {
+        setProduct({
+          ...product,
+          stock: updatedProductDoc.data().stock
+        });
+      }
+
+      console.log("Cart and stock updated successfully!");
+    } catch (error) {
+      console.error("Error updating cart or stock:", error);
+    }
+  };
+  
+  // Navigate to the product detail page for the selected recommendation
+  const navigateToProduct = (productId) => {
+    console.log("Navigating to product:", productId);
+    
+    // Reset the screen with new params
+    navigation.push("Product/productDetails", { itemId: productId });
+  };
+
+  // Rating UI component
+  const RatingInput = ({ value, onChange }) => {
+    return (
+      <View style={styles.ratingContainer}>
+        <Text style={styles.ratingLabel}>Your Rating:</Text>
+        <View style={styles.starContainer}>
+          {[1, 2, 3, 4, 5].map((star) => (
+            <TouchableOpacity 
+              key={star} 
+              onPress={() => onChange(star)}
+              style={styles.starButton}
+            >
+              <Icon
+                name={star <= value ? "star" : "star-outline"}
+                size={28}
+                color="#FFD700"
+              />
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+    );
+  };
+
   return (
     <ScrollView style={styles.container}>
       {loading ? (
@@ -322,7 +505,7 @@ export default function ProductDetails() {
                 flexDirection: 'row',
                 alignItems: 'center',
                 justifyContent: 'center',
-                backgroundColor: '#ff6b6b',
+                backgroundColor: '#007bff',
                 paddingVertical: 10,
                 paddingHorizontal: 20,
                 borderRadius: 8,
@@ -350,14 +533,15 @@ export default function ProductDetails() {
               </Text>
               <Text style={styles.productDetails}>
                 Stock Availability:{" "}
-                <Text style={styles.highlight}>{product.availability}</Text>
+                <Text style={styles.highlight}>{product.stock > 0 ? `${product.stock} in stock` : "Out of Stock"}</Text>
               </Text>
               <Text style={styles.productDetails}>
-                Rating: <Text style={styles.highlight}>{product.rating} ★</Text>
+                Rating: <Text style={styles.highlight}>{Math.floor(product.ratingSum * 100) / 100} ★</Text>
               </Text>
 
+
               <Text style={styles.productDetails}>
-                Care Instruction:{" "}
+                Care Instruction{" "}
                 <Text style={styles.highlight}>{product.careInstructions}</Text>
               </Text>
             </View>
@@ -398,28 +582,56 @@ export default function ProductDetails() {
               </View>
             )}
 
-            {/* Reviews Section */}
             <View style={styles.reviewsContainer}>
               <Text style={styles.reviewsTitle}>Customer Reviews:</Text>
-              {/* Hardcoded reviews */}
-              {[
-                {
-                  username: "Mark Johnson",
-                  rating: 3,
-                  reviewText:
-                    "Decent product, but I expected it to be a bit better.",
-                  createdAt: "2023-12-08T14:45:00Z",
-                },
-              ].map((review, index) => (
+
+              {reviews.slice(0, visibleCount).map((review, index) => (
                 <View key={index} style={styles.reviewBox}>
-                  <Text style={styles.reviewUsername}>{review.username}</Text>
-                  <Text style={styles.reviewRating}>{review.rating} ★</Text>
-                  <Text style={styles.reviewText}>{review.reviewText}</Text>
+                  <View style={styles.reviewHeader}>
+                    <Text style={styles.reviewUsername}>{review.username}</Text>
+                    {review.rating && (
+                      <Text style={styles.reviewRating}>
+                        {review.rating} <Icon name="star" size={14} color="#FFD700" />
+                      </Text>
+                    )}
+                  </View>
+                  <Text style={styles.reviewText}>{review.comment}</Text>
                   <Text style={styles.reviewDate}>
-                    {new Date(review.createdAt).toLocaleDateString()}
+                    {review.createdAt?.toLocaleDateString?.() || ''}
                   </Text>
                 </View>
               ))}
+
+              <View style={styles.buttonRow}>
+                {visibleCount < reviews.length && (
+                  <TouchableOpacity onPress={handleSeeMore} style={styles.button}>
+                    <Text style={styles.buttonText}>See More</Text>
+                  </TouchableOpacity>
+                )}
+                {visibleCount > 3 && (
+                  <TouchableOpacity onPress={handleSeeFewer} style={styles.button}>
+                    <Text style={styles.buttonText}>See Fewer</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+
+            <View style={styles.addReviewContainer}>
+              <Text style={styles.addReviewTitle}>Add Your Review</Text>
+              
+              {/* Rating Input Component */}
+              <RatingInput value={userRating} onChange={setUserRating} />
+              
+              <View style={styles.commentInputContainer}>
+                <TextInput
+                  style={styles.commentInput}
+                  placeholder="Write your review..."
+                  value={newComment}
+                  onChangeText={setNewComment}
+                  multiline={true}
+                />
+                <Button title="Submit" onPress={handleAddComment} />
+              </View>
             </View>
           </View>
 
@@ -437,15 +649,21 @@ export default function ProductDetails() {
               <Text style={styles.actionText}>Wishlist</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={styles.actionButton}
+              style={[
+                styles.actionButton, 
+                product.stock <= 0 ? styles.disabledButton : {}
+              ]}
               onPress={() => addToCart(item.itemId)}
+              disabled={product.stock <= 0}
             >
               <Icon
                 name="cart"
                 size={24}
                 color={isInCart ? "#4CD964" : "#fff"}
               />
-              <Text style={styles.actionText}>Add to Cart</Text>
+              <Text style={styles.actionText}>
+                {isInCart ? "Remove from Cart" : "Add to Cart"}
+              </Text>
             </TouchableOpacity>
           </View>
         </>
@@ -577,20 +795,84 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: "#f9f9f9",
   },
+  reviewHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 5,
+  },
   reviewUsername: {
     fontWeight: "bold",
     color: "#333",
   },
   reviewRating: {
     color: "#ff6b6b",
+    fontWeight: "bold",
   },
   reviewText: {
     color: "#666",
+    marginVertical: 5,
   },
   reviewDate: {
     color: "#999",
     fontSize: 12,
     marginTop: 5,
+  },
+  addReviewContainer: {
+    marginTop: 25,
+    padding: 15,
+    backgroundColor: "#f9f9f9",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+  },
+  addReviewTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    marginBottom: 10,
+    color: "#333",
+  },
+  ratingContainer: {
+    marginBottom: 15,
+  },
+  ratingLabel: {
+    fontSize: 16,
+    marginBottom: 5,
+    color: "#555",
+  },
+  starContainer: {
+    flexDirection: 'row',
+  },
+  starButton: {
+    padding: 5,
+  },
+  commentInputContainer: {
+    marginVertical: 10,
+  },
+  commentInput: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    padding: 10,
+    borderRadius: 5,
+    marginBottom: 10,
+    minHeight: 80,
+    textAlignVertical: 'top',
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 10,
+  },
+  button: {
+    backgroundColor: '#333',
+    paddingVertical: 8,
+    paddingHorizontal: 15,
+    borderRadius: 5,
+    marginHorizontal: 5,
+  },
+  buttonText: {
+    color: '#fff',
+    fontWeight: '500',
   },
   actionBar: {
     flexDirection: "row",
@@ -603,6 +885,9 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     alignItems: "center",
+  },
+  disabledButton: {
+    opacity: 0.5,
   },
   actionText: {
     color: "#fff",

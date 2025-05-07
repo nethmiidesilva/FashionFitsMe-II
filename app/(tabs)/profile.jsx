@@ -172,20 +172,27 @@ export default function Profile() {
     const date = dateObj.toLocaleDateString();
     const itemCount = item.items ? item.items.length : 0;
     const canReceive = isOrderReceivable(item);
+    const isReceived = item.status === 'Received';
     
     return (
       <View style={styles.orderItemContainer}>
-        <View style={styles.orderItem}>
+        <View style={[
+          styles.orderItem, 
+          isReceived && styles.receivedOrderItem
+        ]}>
           <View style={styles.orderDetails}>
-            <Text style={styles.orderText}>Order #{item.id.slice(0, 8)}</Text>
-            <Text style={styles.orderDate}>{date}</Text>
-            <Text style={styles.orderItemCount}>{itemCount} {itemCount === 1 ? 'item' : 'items'}</Text>
-            <Text style={styles.orderStatus}>Status: {item.status || 'Processing'}</Text>
-            <Text style={styles.orderAmount}>Rs {item.totalAmount?.toFixed(2) || 'N/A'}</Text>
+            <Text style={[styles.orderText, isReceived && styles.receivedText]}>Order #{item.id.slice(0, 8)}</Text>
+            <Text style={[styles.orderDate, isReceived && styles.receivedText]}>{date}</Text>
+            <Text style={[styles.orderItemCount, isReceived && styles.receivedText]}>{itemCount} {itemCount === 1 ? 'item' : 'items'}</Text>
+            <Text style={[
+              styles.orderStatus, 
+              isReceived ? styles.receivedStatusText : styles.orderStatus
+            ]}>Status: {item.status || 'Processing'}</Text>
+            <Text style={[styles.orderAmount, isReceived && styles.receivedText]}>Rs {item.totalAmount?.toFixed(2) || 'N/A'}</Text>
           </View>
           <View style={styles.buttonContainer}>
             <TouchableOpacity 
-              style={styles.detailsButton}
+              style={[styles.detailsButton, isReceived && styles.receivedDetailButton]}
               onPress={() => router.push({
                 pathname: "/order/OrderDetail",
                 params: { orderId: item.id }
@@ -194,7 +201,7 @@ export default function Profile() {
               <Text style={styles.buttonText}>View</Text>
             </TouchableOpacity>
             
-            {canReceive && (
+            {canReceive && !isReceived && (
               <TouchableOpacity 
                 style={styles.receivedButton} 
                 onPress={() => handleMarkAsReceived(item.id)}
@@ -290,11 +297,11 @@ export default function Profile() {
           <Text style={styles.emailText}>{email}</Text>
         </View>
       </View>
-      <View>
+      
       <TouchableOpacity style={styles.avatarButton} onPress={navigateToAvatarCreation}>
-          <Text style={styles.avatarButtonText}>Create Avatar</Text>
-        </TouchableOpacity>
-      </View>
+        <Feather name="user-plus" size={18} color="white" style={styles.avatarButtonIcon} />
+        <Text style={styles.avatarButtonText}>Create Avatar</Text>
+      </TouchableOpacity>
 
       <Text style={styles.sectionTitle}>My Orders</Text>
       {orders.length > 0 ? (
@@ -418,6 +425,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center'
   },
+  avatarButton: {
+    backgroundColor: '#007bff',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 4
+  },
+  avatarButtonIcon: {
+    marginRight: 8
+  },
+  avatarButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 16
+  },
   sectionTitle: { 
     fontSize: 18, 
     fontWeight: 'bold', 
@@ -442,6 +472,12 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2
   },
+  receivedOrderItem: {
+    backgroundColor: 'rgba(255, 255, 255, 0.6)',
+    borderColor: '#ccc',
+    borderWidth: 1,
+    opacity: 0.7,
+  },
   orderDetails: { 
     flex: 1 
   },
@@ -465,10 +501,18 @@ const styles = StyleSheet.create({
     color: '#28a745',
     marginBottom: 4
   },
+  receivedStatusText: {
+    color: '#7f7f7f',
+    fontSize: 14,
+    marginBottom: 4
+  },
   orderAmount: {
     fontSize: 16,
     fontWeight: 'bold',
     color: '#007bff'
+  },
+  receivedText: {
+    color: '#999'
   },
   buttonContainer: {
     flexDirection: 'column',
@@ -480,6 +524,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12, 
     borderRadius: 6,
     alignItems: 'center',
+  },
+  receivedDetailButton: {
+    backgroundColor: '#7f7f7f',
   },
   receivedButton: {
     backgroundColor: '#fff',
