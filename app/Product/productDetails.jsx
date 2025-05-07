@@ -16,6 +16,8 @@ import { db } from "../../configs/firebase";
 import { doc, getDoc, setDoc, updateDoc, arrayUnion } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 import { collection, getDocs } from "firebase/firestore";
+import { TextInput, Button } from 'react-native';
+import { addDoc, serverTimestamp } from 'firebase/firestore';
 
 // Import for Algolia
 import algoliasearch from 'algoliasearch/lite';
@@ -32,11 +34,19 @@ export default function ProductDetails() {
   const [isInCart, setIsInCart] = useState(false);
   const [similarProducts, setSimilarProducts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [newComment, setNewComment] = useState('');
 
   // Initialize Algolia client
   const searchClient = algoliasearch('VIX0G4CQXG', 'e28a685420a7303098b8683c143e094d');
   const index = searchClient.initIndex('clothes');
+  const [visibleCount, setVisibleCount] = useState(3);
 
+  const handleSeeMore = () => {
+    setVisibleCount((prev) => prev + 3);
+  };
+  const handleSeeFewer = () => {
+    setVisibleCount((prev) => Math.max(prev - 3, 3));
+  };
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -60,7 +70,37 @@ export default function ProductDetails() {
 
   // Find the current product
   const product = clothes.find((cloth) => cloth.id === itemId);
+  const [reviews, setReviews] = useState([]);
 
+  useEffect(() => {
+    const fetchReviews = async () => {
+      try {
+        setLoading(true);
+        const commentsCollection = collection(db, "userComments");
+        const commentsSnapshot = await getDocs(commentsCollection);
+        const commentsData = commentsSnapshot.docs
+          .map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+            createdAt: doc.data().dateandtime?.toDate?.() || null,
+          }))
+          .filter((comment) => comment.itemId === itemId); // manual filter
+        setReviews(commentsData);
+        setLoading(false);
+      } catch (error) {
+        console.error("Error fetching reviews:", error);
+        setLoading(false);
+      }
+    };
+  
+    if (itemId) {
+      fetchReviews();
+    }
+  }, [itemId]);
+  
+  
+  
+  
   // Fetch similar products from Algolia
   useEffect(() => {
     const fetchSimilarProducts = async () => {
@@ -217,7 +257,10 @@ export default function ProductDetails() {
       console.error("Error updating wishlist:", error);
     }
   };
+  
 
+  
+  
   useEffect(() => {
     // Check if the item is in the cart on component mount
     const fetchCartState = async () => {
@@ -237,7 +280,68 @@ export default function ProductDetails() {
 
     fetchCartState();
   }, [item.itemId]); // Effect runs when itemId changes
+  // Generate unique display name like "user123"
+function generateDisplayName() {
+  return 'user' + Math.floor(100000 + Math.random() * 900000); // 6-digit random ID
+}
+const navigateToTryOn = () => {
+  if (!product) return;
+  
+  const auth = getAuth();
+  if (!auth.currentUser) {
+    Alert.alert(
+      "Sign In Required", 
+      "You need to sign in to use the virtual try-on feature.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Sign In", onPress: () => navigation.navigate("auth/login") }
+      ]
+    );
+    return;
+  }
+  
+  navigation.navigate("Avater/TryOnAvatar", { 
+    productImage: product.Image,
+    productId: product.id,
+    productName: product.name
+  });
+}
 
+
+  const handleAddComment = async () => {
+    const displayName = await generateDisplayName();
+    const userId = getAuth().currentUser.uid;
+    if (!userId || newComment.trim() === '') return;
+  
+    try {
+      await addDoc(collection(db, 'userComments'), {
+        comment: newComment.trim(),
+        dateandtime: serverTimestamp(),
+        itemId: itemId, // current item's ID
+        userId: userId,
+        //userImageLink: user.photoURL || '',
+        username: displayName || 'Anonymous',
+      });
+  
+      setNewComment('');
+      // Refresh comments
+      setLoading(true);
+        const commentsCollection = collection(db, "userComments");
+        const commentsSnapshot = await getDocs(commentsCollection);
+        const commentsData = commentsSnapshot.docs
+          .map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+            createdAt: doc.data().dateandtime?.toDate?.() || null,
+          }))
+          .filter((comment) => comment.itemId === itemId); // manual filter
+        setReviews(commentsData);
+        setLoading(false);
+    } catch (error) {
+      console.error('Error adding comment:', error);
+    }
+  };
+  
   const addToCart = async (clotheId) => {
     try {
       const userId = getAuth().currentUser.uid; // Get the current user ID
@@ -281,30 +385,6 @@ export default function ProductDetails() {
     navigation.push("Product/productDetails", { itemId: productId });
   };
 
-  // Navigate to the Try On Avatar screen
-  const navigateToTryOn = () => {
-    if (!product) return;
-    
-    const auth = getAuth();
-    if (!auth.currentUser) {
-      Alert.alert(
-        "Sign In Required", 
-        "You need to sign in to use the virtual try-on feature.",
-        [
-          { text: "Cancel", style: "cancel" },
-          { text: "Sign In", onPress: () => navigation.navigate("auth/login") }
-        ]
-      );
-      return;
-    }
-    
-    navigation.navigate("Avater/TryOnAvatar", { 
-      productImage: product.Image,
-      productId: product.id,
-      productName: product.name
-    });
-  }
-
   return (
     <ScrollView style={styles.container}>
       {loading ? (
@@ -315,24 +395,6 @@ export default function ProductDetails() {
           <View style={styles.detailsContainer}>
             <Text style={styles.productName}>{product.name}</Text>
             <Text style={styles.productPrice}>${product.price}</Text>
-
-            {/* Virtual Try-On Button */}
-            <TouchableOpacity 
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: '#ff6b6b',
-                paddingVertical: 10,
-                paddingHorizontal: 20,
-                borderRadius: 8,
-                marginVertical: 15,
-              }}
-              onPress={navigateToTryOn}
-            >
-              <Icon name="body-outline" size={20} color="#fff" />
-              <Text style={{color: '#fff', fontWeight: 'bold', marginLeft: 8}}>Virtual Try-On</Text>
-            </TouchableOpacity>
 
             <View style={styles.detailsBox}>
               <Text style={styles.productDetails}>
@@ -357,7 +419,7 @@ export default function ProductDetails() {
               </Text>
 
               <Text style={styles.productDetails}>
-                Care Instruction:{" "}
+                Care Instruction{" "}
                 <Text style={styles.highlight}>{product.careInstructions}</Text>
               </Text>
             </View>
@@ -389,6 +451,23 @@ export default function ProductDetails() {
                       <Text style={styles.recommendedProductPrice}>
                         ${item.price}
                       </Text>
+                      <TouchableOpacity 
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: '#ff6b6b',
+                paddingVertical: 10,
+                paddingHorizontal: 20,
+                borderRadius: 8,
+                marginVertical: 15,
+              }}
+              onPress={navigateToTryOn}
+            >
+              <Icon name="body-outline" size={20} color="#fff" />
+              <Text style={styles.tryOnText}>Virtual Try-On</Text>
+
+            </TouchableOpacity>
                     </TouchableOpacity>
                   )}
                   ListEmptyComponent={
@@ -398,29 +477,46 @@ export default function ProductDetails() {
               </View>
             )}
 
-            {/* Reviews Section */}
-            <View style={styles.reviewsContainer}>
-              <Text style={styles.reviewsTitle}>Customer Reviews:</Text>
-              {/* Hardcoded reviews */}
-              {[
-                {
-                  username: "Mark Johnson",
-                  rating: 3,
-                  reviewText:
-                    "Decent product, but I expected it to be a bit better.",
-                  createdAt: "2023-12-08T14:45:00Z",
-                },
-              ].map((review, index) => (
-                <View key={index} style={styles.reviewBox}>
-                  <Text style={styles.reviewUsername}>{review.username}</Text>
-                  <Text style={styles.reviewRating}>{review.rating} ★</Text>
-                  <Text style={styles.reviewText}>{review.reviewText}</Text>
-                  <Text style={styles.reviewDate}>
-                    {new Date(review.createdAt).toLocaleDateString()}
-                  </Text>
-                </View>
-              ))}
-            </View>
+
+
+
+<View style={styles.reviewsContainer}>
+      <Text style={styles.reviewsTitle}>Customer Reviews:</Text>
+
+      {reviews.slice(0, visibleCount).map((review, index) => (
+        <View key={index} style={styles.reviewBox}>
+          <Text style={styles.reviewUsername}>{review.username}</Text>
+          <Text style={styles.reviewText}>{review.comment}</Text>
+          <Text style={styles.reviewDate}>
+            {review.createdAt?.toLocaleDateString?.() || ''}
+          </Text>
+        </View>
+      ))}
+
+      <View style={styles.buttonRow}>
+        {visibleCount < reviews.length && (
+          <TouchableOpacity onPress={handleSeeMore} style={styles.button}>
+            <Text style={styles.buttonText}>See More</Text>
+          </TouchableOpacity>
+        )}
+        {visibleCount > 3 && (
+          <TouchableOpacity onPress={handleSeeFewer} style={styles.button}>
+            <Text style={styles.buttonText}>See Fewer</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    </View>
+
+<View style={styles.commentInputContainer}>
+  <TextInput
+    style={styles.commentInput}
+    placeholder="Write your review..."
+    value={newComment}
+    onChangeText={setNewComment}
+  />
+  <Button title="Submit" onPress={handleAddComment} />
+</View>
+
           </View>
 
           {/* Floating action bar with icons */}
@@ -577,6 +673,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: "#f9f9f9",
   },
+  
   reviewUsername: {
     fontWeight: "bold",
     color: "#333",
@@ -601,6 +698,20 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
   },
+  commentInputContainer: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  marginVertical: 10,
+},
+commentInput: {
+  flex: 1,
+  borderWidth: 1,
+  borderColor: '#ccc',
+  padding: 10,
+  borderRadius: 5,
+  marginRight: 10,
+},
+
   actionButton: {
     alignItems: "center",
   },
