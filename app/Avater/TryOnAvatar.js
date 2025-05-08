@@ -593,15 +593,6 @@ const TryOnAvatar = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      {/* Product Info Banner */}
-      {productName && (
-        <View style={styles.productInfoBanner}>
-          <Text style={styles.tryingOnText}>
-            Trying on: <Text style={styles.productNameHighlight}>{productName}</Text>
-          </Text>
-        </View>
-      )}
-      
       <View style={styles.canvasContainer}>
         {avatarModelUrl ? (
           <WebView
@@ -620,6 +611,15 @@ const TryOnAvatar = ({ navigation }) => {
         ) : (
           <View style={styles.placeholderContainer}>
             <Text style={styles.placeholderText}>No avatar model available</Text>
+          </View>
+        )}
+        
+        {/* Product Info Banner - Moved inside the canvas container, positioned at the top */}
+        {productName && (
+          <View style={styles.productInfoBanner}>
+            <Text style={styles.tryingOnText}>
+              Trying on: <Text style={styles.productNameHighlight}>{productName}</Text>
+            </Text>
           </View>
         )}
         
@@ -671,6 +671,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#4361EE',
     padding: 10,
     alignItems: 'center',
+    position: 'absolute',
+    top: 20, // Moved down from the top
+    left: 0,
+    right: 0,
+    zIndex: 10, // Ensure it shows above the 3D content
+    opacity: 0.9, // Slightly transparent
+    borderRadius: 5,
+    // marginHorizontal: 20, // Add horizontal margin
+    width: '100%',
   },
   tryingOnText: {
     color: 'white',
