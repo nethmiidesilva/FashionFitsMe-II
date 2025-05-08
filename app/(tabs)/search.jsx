@@ -179,6 +179,9 @@ const SearchScreen = () => {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Add a spacer view to push search bar down */}
+      <View style={styles.topSpacer} />
+      
       <InstantSearch
         searchClient={searchClient}
         indexName="clothes"
@@ -412,15 +415,20 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#fff',
   },
+  // Add a spacer to push search bar down
+  topSpacer: {
+    height: 20, // You can adjust this value to move the search bar further down
+  },
   searchBarContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 12, // Increased from 8 to give more vertical padding
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
     zIndex: 10,
+    marginTop: 8, // Added margin top to push it downward
   },
   searchInputContainer: {
     flex: 1,
@@ -431,14 +439,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e0e0e0',
     paddingHorizontal: 12,
-    height: 42,
+    height: 46, // Slightly increased height
   },
   searchIcon: {
     marginRight: 8,
   },
   searchInput: {
     flex: 1,
-    height: 40,
+    height: 44, // Slightly increased height
     fontSize: 16,
     color: '#333',
   },
@@ -453,7 +461,7 @@ const styles = StyleSheet.create({
   },
   searchPanelOverlay: {
     position: 'absolute',
-    top: 58, // Height of search bar + padding
+    top: 88, // Updated: Height of top spacer + search bar + padding
     left: 0,
     right: 0,
     bottom: 0,
