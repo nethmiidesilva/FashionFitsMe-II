@@ -2,51 +2,22 @@ import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView, ActivityIndicator, Dimensions, Alert } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { doc, getDoc } from 'firebase/firestore';
-import { auth, db } from './../../configs/firebase'; // Import db from firebase config
+import { auth, db } from './../../configs/firebase';
 import { useLocalSearchParams } from "expo-router";
 
-// Local clothing store with metadata
+// Updated clothing store to include product sizes
 const clothingStore = {
   shirts: [
     { 
       id: "shirt1", 
-      name: "Basic T-Shirt", 
-      type: "embedded", 
-      objectName: "Wolf3D_Outfit_Top",
-      thumbnail: "https://via.placeholder.com/100",
-      color: "#ff0000"
-    },
-    { 
-      id: "shirt2", 
       name: "Formal Shirt", 
-      type: "external", 
-      modelPath: "/hyde__jacket.glb",
+      type: "embedded", // External GLB file
+      modelPath: "Wolf3D_Outfit_Top",
       position: [0, 0, 0],
       rotation: [0, 0, 0],
       scale: [1, 1, 1],
-      thumbnail: "https://via.placeholder.com/100",
-      color: "#0000ff"
+      thumbnail: "/api/placeholder/100/100",
     },
-    { 
-      id: "shirt3", 
-      name: "Hoodie", 
-      type: "external",
-      modelPath: "/Untitled.glb",
-      position: [0, 0, 0],
-      rotation: [0, 0, 0],
-      scale: [1, 1, 1],
-      objectName: "/Untitled.glb",
-      thumbnail: "https://via.placeholder.com/100",
-      color: "#00ff00"
-    },
-    { 
-      id: "shirt4", 
-      name: "Tank Top", 
-      type: "embedded",
-      objectName: "Wolf3D_Outfit_Top_4",
-      thumbnail: "https://via.placeholder.com/100",
-      color: "#ffff00"
-    }
   ],
   pants: [
     { 
@@ -56,14 +27,6 @@ const clothingStore = {
       objectName: "Wolf3D_Outfit_Bottom",
       thumbnail: "https://via.placeholder.com/100",
       color: "#000080"
-    },
-    { 
-      id: "pants2", 
-      name: "Shorts", 
-      type: "embedded",
-      objectName: "Wolf3D_Outfit_Bottom_2",
-      thumbnail: "https://via.placeholder.com/100",
-      color: "#8B4513"
     }
   ]
 };
@@ -105,7 +68,7 @@ const ClothingSelector = ({ title, items, selectedItem, onSelect }) => {
 };
 
 // The HTML content that will be injected into the WebView
-const generateHtmlContent = (avatarModelUrl, selectedShirt, selectedPants) => {
+const generateHtmlContent = (avatarModelUrl, selectedClothing) => {
   return `
     <!DOCTYPE html>
     <html lang="en">
@@ -173,10 +136,9 @@ const generateHtmlContent = (avatarModelUrl, selectedShirt, selectedPants) => {
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
         
-        // Get the avatar model URL and selected clothing items from React Native
+        // Get the avatar model URL and selected clothing items
         const avatarModelUrl = "${avatarModelUrl}";
-        const selectedShirt = ${JSON.stringify(clothingStore.shirts.find(item => item.id === selectedShirt))};
-        const selectedPants = ${JSON.stringify(clothingStore.pants.find(item => item.id === selectedPants))};
+        const selectedClothing = ${JSON.stringify(selectedClothing)};
         
         // Setup scene
         const scene = new THREE.Scene();
@@ -209,16 +171,20 @@ const generateHtmlContent = (avatarModelUrl, selectedShirt, selectedPants) => {
         const loader = new GLTFLoader();
         console.log("Loading avatar from: " + avatarModelUrl);
         
+        // Track avatar and clothing models
+        let avatarModel = null;
+        let clothingModels = [];
+        
         loader.load(
           avatarModelUrl,
           function(gltf) {
-            const avatar = gltf.scene;
-            avatar.position.set(0, -1, 0);
-            avatar.scale.set(1.5, 1.5, 1.5);
-            scene.add(avatar);
+            avatarModel = gltf.scene;
+            avatarModel.position.set(0, -1, 0);
+            avatarModel.scale.set(1.5, 1.5, 1.5);
+            scene.add(avatarModel);
             
             // Reset all embedded clothing visibility first
-            avatar.traverse((child) => {
+            avatarModel.traverse((child) => {
               if (child.isMesh) {
                 // Hide all clothing items first
                 if (child.name.includes('Outfit_Top') || child.name.includes('Outfit_Bottom')) {
@@ -228,35 +194,33 @@ const generateHtmlContent = (avatarModelUrl, selectedShirt, selectedPants) => {
             });
             
             // Show only the selected embedded items
-            avatar.traverse((child) => {
-              if (child.isMesh) {
-                // Show selected shirt if it's embedded
-                if (selectedShirt && selectedShirt.type === 'embedded' && child.name.includes(selectedShirt.objectName)) {
+            if (selectedClothing.shirt && selectedClothing.shirt.type === 'embedded') {
+              avatarModel.traverse((child) => {
+                if (child.isMesh && child.name.includes(selectedClothing.shirt.objectName)) {
                   child.visible = true;
                   // Apply color to material
-                  if (child.material && selectedShirt.color) {
-                    child.material.color.set(selectedShirt.color);
+                  if (child.material && selectedClothing.shirt.color) {
+                    child.material.color.set(selectedClothing.shirt.color);
                   }
                 }
-                
-                // Show selected pants if it's embedded
-                if (selectedPants && selectedPants.type === 'embedded' && child.name.includes(selectedPants.objectName)) {
-                  child.visible = true;
-                  // Apply color to material
-                  if (child.material && selectedPants.color) {
-                    child.material.color.set(selectedPants.color);
-                  }
-                }
-              }
-            });
-            
-            // Load external clothing if needed
-            if (selectedShirt && selectedShirt.type === 'external') {
-              loadExternalItem(selectedShirt);
+              });
             }
             
-            if (selectedPants && selectedPants.type === 'external') {
-              loadExternalItem(selectedPants);
+            if (selectedClothing.pants && selectedClothing.pants.type === 'embedded') {
+              avatarModel.traverse((child) => {
+                if (child.isMesh && child.name.includes(selectedClothing.pants.objectName)) {
+                  child.visible = true;
+                  // Apply color to material
+                  if (child.material && selectedClothing.pants.color) {
+                    child.material.color.set(selectedClothing.pants.color);
+                  }
+                }
+              });
+            }
+            
+            // Load external clothing items
+            if (selectedClothing.product && selectedClothing.product.modelURL) {
+              loadExternalClothing(selectedClothing.product);
             }
             
             // Hide loading container
@@ -288,43 +252,61 @@ const generateHtmlContent = (avatarModelUrl, selectedShirt, selectedPants) => {
         );
         
         // Function to load external clothing items
-        function loadExternalItem(item) {
+        function loadExternalClothing(product) {
+          // Remove existing clothing models
+          clothingModels.forEach(model => {
+            scene.remove(model);
+          });
+          clothingModels = [];
+          
+          console.log("Loading external clothing model from:", product.modelURL);
+          
           loader.load(
-            item.modelPath,
+            product.modelURL,
             function(gltf) {
               const clothingModel = gltf.scene;
               
-              // Set position, rotation, scale
-              clothingModel.position.set(...item.position);
-              clothingModel.rotation.set(...item.rotation);
-              clothingModel.scale.set(...item.scale);
+              // Default position/rotation/scale - should be customized based on your model requirements
+              clothingModel.position.set(0, -1, 0);
+              clothingModel.rotation.set(0, 0, 0);
+              clothingModel.scale.set(1.5, 1.5, 1.5);
               
-              // Apply color
-              clothingModel.traverse((child) => {
-                if (child.isMesh && child.material) {
-                  // Create a new material to avoid modifying the cached one
-                  if (Array.isArray(child.material)) {
-                    child.material = child.material.map(mat => {
-                      const newMat = mat.clone();
-                      newMat.color.set(item.color || '#ffffff');
-                      return newMat;
-                    });
-                  } else {
-                    const newMaterial = child.material.clone();
-                    newMaterial.color.set(item.color || '#ffffff');
-                    child.material = newMaterial;
+              // Apply color if specified
+              if (product.color) {
+                clothingModel.traverse((child) => {
+                  if (child.isMesh && child.material) {
+                    // Create a new material to avoid modifying the cached one
+                    if (Array.isArray(child.material)) {
+                      child.material = child.material.map(mat => {
+                        const newMat = mat.clone();
+                        newMat.color.set(product.color);
+                        return newMat;
+                      });
+                    } else {
+                      const newMaterial = child.material.clone();
+                      newMaterial.color.set(product.color);
+                      child.material = newMaterial;
+                    }
                   }
-                }
-              });
+                });
+              }
               
               scene.add(clothingModel);
+              clothingModels.push(clothingModel);
+              
+              // Notify React Native that the clothing loaded successfully
+              window.ReactNativeWebView?.postMessage(JSON.stringify({ 
+                type: 'clothingLoaded',
+                productId: product.id
+              }));
             },
             undefined,
             function(error) {
               console.error('Error loading external clothing model:', error);
               window.ReactNativeWebView?.postMessage(JSON.stringify({ 
                 type: 'clothingLoadError',
-                message: 'Failed to load ' + item.name + ': ' + error.message
+                productId: product.id,
+                message: 'Failed to load ' + product.name + ': ' + error.message
               }));
             }
           );
@@ -353,9 +335,47 @@ const generateHtmlContent = (avatarModelUrl, selectedShirt, selectedPants) => {
           try {
             const message = JSON.parse(event.data);
             if (message.type === 'updateClothing') {
-              // Handle clothing updates from React Native here
               console.log('Received clothing update:', message);
-              // You would need to update the scene based on the new selections
+              
+              // Update existing clothing visibility
+              if (avatarModel) {
+                // Reset all embedded clothing visibility first
+                avatarModel.traverse((child) => {
+                  if (child.isMesh) {
+                    if (child.name.includes('Outfit_Top') || child.name.includes('Outfit_Bottom')) {
+                      child.visible = false;
+                    }
+                  }
+                });
+                
+                // Show selected embedded clothing
+                if (message.shirt && message.shirt.type === 'embedded') {
+                  avatarModel.traverse((child) => {
+                    if (child.isMesh && child.name.includes(message.shirt.objectName)) {
+                      child.visible = true;
+                      if (child.material && message.shirt.color) {
+                        child.material.color.set(message.shirt.color);
+                      }
+                    }
+                  });
+                }
+                
+                if (message.pants && message.pants.type === 'embedded') {
+                  avatarModel.traverse((child) => {
+                    if (child.isMesh && child.name.includes(message.pants.objectName)) {
+                      child.visible = true;
+                      if (child.material && message.pants.color) {
+                        child.material.color.set(message.pants.color);
+                      }
+                    }
+                  });
+                }
+              }
+              
+              // Load external product if provided
+              if (message.product && message.product.modelURL) {
+                loadExternalClothing(message.product);
+              }
             }
           } catch (e) {
             console.error('Error parsing message:', e);
@@ -363,12 +383,7 @@ const generateHtmlContent = (avatarModelUrl, selectedShirt, selectedPants) => {
         });
         
         // Notify React Native that the WebView is ready
-        const sendReadyMessage = () => {
-          window.ReactNativeWebView?.postMessage(JSON.stringify({ type: 'webviewReady' }));
-        };
-        
-        // Send ready message when everything is loaded
-        window.onload = sendReadyMessage;
+        window.ReactNativeWebView?.postMessage(JSON.stringify({ type: 'webviewReady' }));
       </script>
     </body>
     </html>
@@ -383,10 +398,12 @@ const TryOnAvatar = ({ navigation }) => {
   // State variables
   const [selectedShirt, setSelectedShirt] = useState(clothingStore.shirts[0].id);
   const [selectedPants, setSelectedPants] = useState(clothingStore.pants[0].id);
+  const [selectedSize, setSelectedSize] = useState('clothS'); // Default to small size
   const [isLoading, setIsLoading] = useState(true);
   const [avatarModelUrl, setAvatarModelUrl] = useState('');
   const [error, setError] = useState(null);
   const [productDetails, setProductDetails] = useState(null);
+  const [availableSizes, setAvailableSizes] = useState(['clothS', 'clothM', 'clothL', 'clothXL']);
   const webViewRef = useRef(null);
   
   // Fetch product details if productId is provided
@@ -398,8 +415,25 @@ const TryOnAvatar = ({ navigation }) => {
           const productDoc = await getDoc(productDocRef);
           
           if (productDoc.exists()) {
-            setProductDetails(productDoc.data());
-            console.log("Product details loaded:", productDoc.data());
+            const data = productDoc.data();
+            setProductDetails(data);
+            console.log("Product details loaded:", data);
+            
+            // Check which sizes are available
+            const sizes = [];
+            if (data.clothS) sizes.push('clothS');
+            if (data.clothM) sizes.push('clothM');
+            if (data.clothL) sizes.push('clothL');
+            if (data.clothXL) sizes.push('clothXL');
+            
+            setAvailableSizes(sizes);
+            
+            // Set default size (clothS if available, otherwise first available size)
+            if (sizes.includes('clothS')) {
+              setSelectedSize('clothS');
+            } else if (sizes.length > 0) {
+              setSelectedSize(sizes[0]);
+            }
           }
         } catch (err) {
           console.error('Error fetching product details:', err);
@@ -457,8 +491,29 @@ const TryOnAvatar = ({ navigation }) => {
     fetchAvatarModel();
   }, []);
   
+  // Prepare clothing data for WebView
+  const prepareSelectedClothing = () => {
+    const selectedClothing = {
+      shirt: clothingStore.shirts.find(item => item.id === selectedShirt),
+      pants: clothingStore.pants.find(item => item.id === selectedPants),
+    };
+    
+    // Add product details if available
+    if (productDetails && selectedSize && productDetails[selectedSize]) {
+      selectedClothing.product = {
+        ...productDetails,
+        modelURL: productDetails[selectedSize],
+        name: productName || 'Product',
+        id: productId,
+        size: selectedSize
+      };
+    }
+    
+    return selectedClothing;
+  };
+  
   // Generate HTML content based on selected items and avatar URL
-  const htmlContent = avatarModelUrl ? generateHtmlContent(avatarModelUrl, selectedShirt, selectedPants) : '';
+  const htmlContent = avatarModelUrl ? generateHtmlContent(avatarModelUrl, prepareSelectedClothing()) : '';
   
   // Handle messages from WebView
   const onWebViewMessage = (event) => {
@@ -481,9 +536,13 @@ const TryOnAvatar = ({ navigation }) => {
           setIsLoading(false);
           break;
           
+        case 'clothingLoaded':
+          console.log('Clothing loaded successfully:', message.productId);
+          break;
+          
         case 'clothingLoadError':
           console.error('Error loading clothing:', message.message);
-          // Could show a toast or small notification here
+          Alert.alert('Error', `Failed to load clothing: ${message.message}`);
           break;
           
         default:
@@ -497,14 +556,14 @@ const TryOnAvatar = ({ navigation }) => {
   // Update WebView when selections change
   useEffect(() => {
     if (webViewRef.current && avatarModelUrl) {
+      const selectedClothing = prepareSelectedClothing();
       const message = {
         type: 'updateClothing',
-        shirt: clothingStore.shirts.find(item => item.id === selectedShirt),
-        pants: clothingStore.pants.find(item => item.id === selectedPants)
+        ...selectedClothing
       };
       webViewRef.current.postMessage(JSON.stringify(message));
     }
-  }, [selectedShirt, selectedPants, avatarModelUrl]);
+  }, [selectedShirt, selectedPants, selectedSize, productDetails, avatarModelUrl]);
 
   // If still loading initial data
   if (isLoading && !avatarModelUrl) {
@@ -571,56 +630,32 @@ const TryOnAvatar = ({ navigation }) => {
           </View>
         )}
       </View>
-
-      <View style={styles.controlsPanel}>
-        
-        
-        <ClothingSelector 
-          title="Shirts" 
-          items={clothingStore.shirts} 
-          selectedItem={selectedShirt} 
-          onSelect={setSelectedShirt} 
-        />
-        
-        <ClothingSelector 
-          title="Pants" 
-          items={clothingStore.pants} 
-          selectedItem={selectedPants} 
-          onSelect={setSelectedPants} 
-        />
-
-        <View style={styles.infoPanel}>
-          <Text style={styles.sectionTitle}>Selected Outfit</Text>
-          <Text>Shirt: {clothingStore.shirts.find(item => item.id === selectedShirt)?.name}</Text>
-          <Text>Type: {clothingStore.shirts.find(item => item.id === selectedShirt)?.type}</Text>
-          {clothingStore.shirts.find(item => item.id === selectedShirt)?.type === 'external' && (
-            <Text>Model Path: {clothingStore.shirts.find(item => item.id === selectedShirt)?.modelPath}</Text>
-          )}
-          <Text>Pants: {clothingStore.pants.find(item => item.id === selectedPants)?.name}</Text>
-        </View>
-        
-        <View style={styles.helpPanel}>
-          <Text style={styles.sectionTitle}>Clothing Types</Text>
-          <View style={styles.typeRow}>
-            <View style={styles.externalBadge}>
-              <Text style={styles.externalBadgeText}>E</Text>
-            </View>
-            <Text style={styles.typeText}>External GLB Model</Text>
-          </View>
-          <View style={styles.typeRow}>
-            <View style={styles.spacer} />
-            <Text style={styles.typeText}>Built-in Avatar Clothing</Text>
+      
+      {/* Size selector if product is available */}
+      {productDetails && availableSizes.length > 0 && (
+        <View style={styles.sizeSelector}>
+          <Text style={styles.sectionTitle}>Size:</Text>
+          <View style={styles.sizeOptions}>
+            {availableSizes.map(size => (
+              <TouchableOpacity
+                key={size}
+                style={[
+                  styles.sizeButton,
+                  selectedSize === size && styles.selectedSizeButton
+                ]}
+                onPress={() => setSelectedSize(size)}
+              >
+                <Text style={[
+                  styles.sizeButtonText,
+                  selectedSize === size && styles.selectedSizeButtonText
+                ]}>
+                  {size.replace('cloth', '')}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
         </View>
-        
-        {/* Button to create new avatar if needed */}
-        <TouchableOpacity 
-          style={styles.createAvatarButton}
-          onPress={() => navigation.navigate('AvatarScreen')}
-        >
-          <Text style={styles.buttonText}>Create New Avatar</Text>
-        </TouchableOpacity>
-      </View>
+      )}
     </View>
   );
 };
@@ -630,7 +665,7 @@ const { width, height } = Dimensions.get('window');
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    flexDirection: 'column', // Column for mobile layout
+    flexDirection: 'column',
   },
   productInfoBanner: {
     backgroundColor: '#4361EE',
@@ -708,8 +743,44 @@ const styles = StyleSheet.create({
     marginTop: 10,
     fontSize: 16,
   },
+  sizeSelector: {
+    padding: 15,
+    backgroundColor: '#f0f0f0',
+    borderTopWidth: 1,
+    borderTopColor: '#ddd',
+  },
+  sizeOptions: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 10,
+  },
+  sizeButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 5,
+    borderWidth: 1,
+    borderColor: '#ccc',
+    marginHorizontal: 5,
+    backgroundColor: '#fff',
+  },
+  selectedSizeButton: {
+    borderColor: '#4361EE',
+    backgroundColor: '#4361EE',
+  },
+  sizeButtonText: {
+    fontSize: 14,
+    color: '#333',
+  },
+  selectedSizeButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
   controlsPanel: {
-    flex: 1,
     padding: 15,
     backgroundColor: '#f5f5f5',
   },
@@ -732,11 +803,6 @@ const styles = StyleSheet.create({
   },
   selectorContainer: {
     marginBottom: 15,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 10,
   },
   itemsGrid: {
     flexDirection: 'row',
@@ -786,51 +852,10 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: 'bold',
   },
-  infoPanel: {
-    marginTop: 15,
-    padding: 10,
-    backgroundColor: '#e0e0e0',
-    borderRadius: 5,
-  },
-  helpPanel: {
-    marginTop: 15,
-    padding: 10,
-    backgroundColor: '#e6f7ff',
-    borderRadius: 5,
-  },
-  typeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 5,
-  },
-  typeText: {
-    marginLeft: 5,
-  },
-  spacer: {
-    width: 15,
-    height: 15,
-    marginRight: 5,
-  },
-  createAvatarButton: {
-    marginTop: 15,
-    backgroundColor: '#4361EE',
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
   buttonText: {
     color: 'white',
     fontWeight: 'bold',
     fontSize: 16,
-  },
-  // Responsive styles for different screen sizes
-  '@media (min-width: 768)': {
-    container: {
-      flexDirection: 'row', // Row layout for tablets and larger
-    },
-    controlsPanel: {
-      width: 300,
-    },
   },
 });
 
