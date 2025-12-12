@@ -11,8 +11,8 @@ const itemWidth = (width - 40) / 2; // For 2-column layout with margins
 
 // Initialize the Algolia client with your credentials
 const searchClient = algoliasearch(
-  'VIX0G4CQXG',
-  'e28a685420a7303098b8683c143e094d'
+  '5PA520MX69',
+  'd2521f0c2d10c5ae3b6b42313f83dac9'
 );
 
 // Recent searches storage

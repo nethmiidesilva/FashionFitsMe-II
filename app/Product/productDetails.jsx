@@ -39,7 +39,7 @@ export default function ProductDetails() {
   const [product, setProduct] = useState(null);
 
   // Initialize Algolia client
-  const searchClient = algoliasearch('VIX0G4CQXG', 'e28a685420a7303098b8683c143e094d');
+  const searchClient = algoliasearch('5PA520MX69', 'd2521f0c2d10c5ae3b6b42313f83dac9');
   const index = searchClient.initIndex('clothes');
   const [visibleCount, setVisibleCount] = useState(3);
 
@@ -108,6 +108,7 @@ export default function ProductDetails() {
   // Fetch similar products from Algolia
   useEffect(() => {
     const fetchSimilarProducts = async () => {
+      console.log('Fetching similar products from Algolia...: ', itemId, product);
       if (itemId && product && product.category) {
         try {
           console.log(`Searching for products with category: ${product.category}`);
