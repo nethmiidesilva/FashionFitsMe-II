@@ -1,10 +1,14 @@
 import { View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
-import React from 'react';
+
 import { useRouter } from 'expo-router';
 
 export default function Start() {
   const router = useRouter();
+  
 
+
+
+  
   return (
     <View style={styles.container}>
       <Image
