@@ -1,37 +1,46 @@
-import React, { useState, useRef } from "react";
-import {
-  StyleSheet,
-  View,
-  Text,
-  Image,
-  TextInput,
-  FlatList,
-  TouchableOpacity,
-  ActivityIndicator,
-  SafeAreaView,
-  Animated,
-  Dimensions,
-  Keyboard,
-} from "react-native";
-import algoliasearch from "algoliasearch/lite";
-import {
-  InstantSearch,
-  useSearchBox,
-  useInfiniteHits,
-  Configure,
-} from "react-instantsearch-hooks-web";
-import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router"; // For navigation
+import React, { useState, useRef } from 'react';
+import { StyleSheet, View, Text, Image, TextInput, FlatList, TouchableOpacity, ActivityIndicator, SafeAreaView, Animated, Dimensions, Keyboard } from 'react-native';
+import algoliasearch from 'algoliasearch/lite';
+import { InstantSearch, useSearchBox, useInfiniteHits, Configure } from 'react-instantsearch-hooks-web';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router'; // For navigation
+import { searchClient } from '../../components/searchClient';
+// =======
+// import React, { useState, useRef } from "react";
+// import {
+//   StyleSheet,
+//   View,
+//   Text,
+//   Image,
+//   TextInput,
+//   FlatList,
+//   TouchableOpacity,
+//   ActivityIndicator,
+//   SafeAreaView,
+//   Animated,
+//   Dimensions,
+//   Keyboard,
+// } from "react-native";
+// import algoliasearch from "algoliasearch/lite";
+// import {
+//   InstantSearch,
+//   useSearchBox,
+//   useInfiniteHits,
+//   Configure,
+// } from "react-instantsearch-hooks-web";
+// import { Ionicons } from "@expo/vector-icons";
+// import { useRouter } from "expo-router"; // For navigation
 
+// >>>>>>> rextro-night
 // Get screen dimensions for responsive grid layout
 const { width } = Dimensions.get("window");
 const itemWidth = (width - 40) / 2; // For 2-column layout with margins
 
 // Initialize the Algolia client with your credentials
-const searchClient = algoliasearch(
-  "5PA520MX69",
-  "d2521f0c2d10c5ae3b6b42313f83dac9"
-);
+// const searchClient = algoliasearch(
+//   '5PA520MX69',
+//   'd2521f0c2d10c5ae3b6b42313f83dac9'
+// );
 
 // Recent searches storage
 class RecentSearchesManager {
@@ -479,6 +488,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
   },
   searchBarContainer: {
+
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 16,
