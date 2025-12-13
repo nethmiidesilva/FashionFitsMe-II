@@ -25,6 +25,7 @@ import { useFocusEffect } from "@react-navigation/native";
 const { width } = Dimensions.get("window");
 
 export default function Home() {
+  const [loading,setLoading] = useState(true);
   const [categories, setcategories] = useState([]);
   const [clothes, setClothes] = useState([]);
   const [recent, setrecent] = useState([]);
@@ -75,12 +76,15 @@ export default function Home() {
 
         const trimmedClothes = fetchedClothes.slice(-10).reverse();
         setrecentclothes(trimmedClothes);
+        setLoading(false);
       } else {
         setrecent([]);
         setrecentclothes([]);
+        setLoading(false);
       }
     } catch (error) {
       console.error("Error fetching data:", error);
+      setLoading(false);
     }
   };
 
@@ -93,6 +97,55 @@ export default function Home() {
       fetchData();
     }, [])
   );
+  if(loading){
+    
+  return (
+    <ScrollView style={{ padding: 20, paddingTop: 60 }}>
+      {/* Header */}
+      <View style={{ marginBottom: 20 }}>
+        <View style={placholderStyles.skelTitle} />
+        <View style={placholderStyles.skelSubtitle} />
+      </View>
+
+      {/* Stories */}
+      <Text style={placholderStyles.sectionTitle}>Latest Stories</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        {[1, 2, 3, 4].map((_, i) => (
+          <View key={i} style={{ marginRight: 15, alignItems: "center" }}>
+            <View style={placholderStyles.skelCircle} />
+            <View style={placholderStyles.skelSmallText} />
+          </View>
+        ))}
+      </ScrollView>
+
+      {/* Clothes Collection */}
+      <Text style={placholderStyles.sectionTitle}>Clothes Collection</Text>
+      <View style={{ flexDirection: "row" }}>
+        {[1, 2].map((_, i) => (
+          <View key={i} style={placholderStyles.skelCard}>
+            <View style={placholderStyles.skelImage} />
+            <View style={placholderStyles.skelText} />
+            <View style={placholderStyles.skelTextSmall} />
+          </View>
+        ))}
+      </View>
+
+      {/* Recently Viewed */}
+      <Text style={placholderStyles.sectionTitle}>Recently Viewed</Text>
+      <View style={{ flexDirection: "row" }}>
+        {[1, 2].map((_, i) => (
+          <View key={i} style={placholderStyles.skelCard}>
+            <View style={placholderStyles.skelImage} />
+            <View style={placholderStyles.skelText} />
+            <View style={placholderStyles.skelTextSmall} />
+          </View>
+        ))}
+      </View>
+    </ScrollView>
+  );
+
+
+  }
 
   return (
     <ScrollView style={styles.container}>
@@ -236,6 +289,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 20,
+    paddingTop: 40,
     backgroundColor: "#fff",
   },
   helloSection: {
@@ -314,3 +368,58 @@ const styles = StyleSheet.create({
     color: "#53b21c",
   },
 });
+
+const placholderStyles = StyleSheet.create({
+  // Skeleton
+  skelTitle: {
+    width: 180,
+    height: 25,
+    borderRadius: 6,
+    backgroundColor: "#e3e3e3",
+    marginBottom: 10,
+  },
+  skelSubtitle: {
+    width: 250,
+    height: 18,
+    borderRadius: 6,
+    backgroundColor: "#e5e5e5",
+  },
+  skelCircle: {
+    width: 90,
+    height: 90,
+    borderRadius: 50,
+    backgroundColor: "#e0e0e0",
+  },
+  skelSmallText: {
+    marginTop: 8,
+    width: 70,
+    height: 12,
+    backgroundColor: "#e0e0e0",
+    borderRadius: 6,
+  },
+  skelCard: {
+    width: (width - 40) / 2,
+    marginRight: 10,
+  },
+  skelImage: {
+    width: "100%",
+    height: 150,
+    borderRadius: 10,
+    backgroundColor: "#e0e0e0",
+    marginBottom: 10,
+  },
+  skelText: {
+    width: "80%",
+    height: 14,
+    backgroundColor: "#e0e0e0",
+    borderRadius: 6,
+    marginBottom: 6,
+  },
+  skelTextSmall: {
+    width: "60%",
+    height: 14,
+    backgroundColor: "#e0e0e0",
+    borderRadius: 6,
+  },
+});
+
